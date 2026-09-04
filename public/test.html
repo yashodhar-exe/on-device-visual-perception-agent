@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Firewall — Test Page</title>
+  <style>
+    :root {
+      --bg: #F4F5F7;
+      --surface: #fff;
+      --border: #D9DEE5;
+      --text: #1E293B;
+      --muted: #64748B;
+      --accent: #2563EB;
+      --danger: #B91C1C;
+      --success: #15803D;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    h2 { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 28px 0 12px; }
+    .subtitle { color: var(--muted); margin-bottom: 28px; font-size: 13px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #DCFCE7; color: #166534; margin-left: 8px; }
+    .badge.warn { background: #FEF3C7; color: #92400E; }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .section p { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+      margin-top: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    label:first-child { margin-top: 0; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      color: var(--text);
+      background: #FAFAFA;
+      outline: none;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { height: 90px; resize: vertical; }
+
+    .code-block {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      background: #F1F5F9;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px 14px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--text);
+      margin-top: 8px;
+    }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .checklist { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .checklist li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.red    { background: #B91C1C; }
+    .dot.orange { background: #B45309; }
+    .dot.blue   { background: #2563EB; }
+    .dot.green  { background: #15803D; }
+    .dot.purple { background: #6D28D9; }
+    .dot.yellow { background: #A16207; }
+
+    .result-box {
+      background: #F0FDF4;
+      border: 1px solid #86EFAC;
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--success);
+      margin-top: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .result-box.fail {
+      background: #FEF2F2;
+      border-color: #FECACA;
+      color: var(--danger);
+    }
+    footer {
+      margin-top: 32px;
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Privacy Firewall <span class="badge">Test Page</span></h1>
+  <p class="subtitle">
+    Load this page with the extension active. It should automatically scan and draw colored overlays over every sensitive item below.
+  </p>
+
+  <!-- ── What to expect ─────────────────────────────────────────────────── -->
+  <div class="section">
+    <h2>What the extension should do</h2>
+    <ul class="checklist">
+      <li><span class="dot red"></span>   <strong>Red overlay</strong> — Password field below</li>
+      <li><span class="dot blue"></span>  <strong>Blue overlay</strong> — Email address in the input and in plain text</li>
+      <li><span class="dot green"></span> <strong>Green overlay</strong> — Phone number</li>
+      <li><span class="dot purple"></span><strong>Purple overlay</strong> — Visa card number</li>
+      <li><span class="dot orange"></span><strong>Orange overlays</strong> — OpenAI key, GitHub token, Stripe key, JWT, DB URLs, AWS key</li>
+      <li><span class="dot red"></span>   <strong>Red overlay</strong> — Social Security Number (Gov ID)</li>
+    </ul>
+    <p style="margin-top:12px;">
+      After overlays appear, click the <strong>extension icon</strong> in Chrome toolbar.
+      The popup should show a Risk Score and list all detected items.
+    </p>
+  </div>
+
+  <div class="row">
+
+    <!-- ── Form inputs ──────────────────────────────────────────────────── -->
+    <div>
+      <div class="section">
+        <h2>Login Form — Inputs</h2>
+        <p>The extension detects typed values inside input and textarea fields.</p>
+        <form id="login-form" autocomplete="off">
+          <label for="email-input">Email Address</label>
+          <input id="email-input" type="email" name="email" value="john.doe@example.com" />
+
+          <label for="pw-input">Password</label>
+          <input id="pw-input" type="password" name="password" value="SuperSecret@1234" />
+
+          <label for="phone-input">Phone Number</label>
+          <input id="phone-input" type="tel" name="phone" value="+1-415-867-5309" />
+
+          <label for="card-input">Credit Card Number</label>
+          <input id="card-input" type="text" name="card" value="4111 1111 1111 1111" />
+
+          <label for="ssn-input">Social Security Number</label>
+          <input id="ssn-input" type="text" name="ssn" value="123-45-6789" />
+        </form>
+      </div>
+
+      <div class="section">
+        <h2>API Key Input — Textarea</h2>
+        <p>Detects secrets pasted into textareas.</p>
+        <label for="apikey-textarea">OpenAI API Key</label>
+        <textarea id="apikey-textarea" name="openai_key">sk-proj-aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890abcdefgh</textarea>
+
+        <label for="stripe-input">Stripe Secret Key</label>
+        <input id="stripe-input" type="text" value="sk_test_51ABC123XYZtest0000000000000001" />
+
+        <label for="razorpay-input">Razorpay Key</label>
+        <input id="razorpay-input" type="text" value="rzp_live_ABCDEFGH123456" />
+      </div>
+    </div>
+
+    <!-- ── Visible page text ────────────────────────────────────────────── -->
+    <div>
+      <div class="section">
+        <h2>Visible Text — Code Blocks</h2>
+        <p>The extension also scans visible text on the page, not just input fields.</p>
+
+        <label>GitHub Personal Access Token</label>
+        <div class="code-block" id="github-token">ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ1234567890ab</div>
+
+        <label>AWS Access Key ID</label>
+        <div class="code-block" id="aws-key">AKIAIOSFODNN7EXAMPLE1234</div>
+
+        <label>JWT Token</label>
+        <div class="code-block" id="jwt-token">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c</div>
+
+        <label>MongoDB Connection String</label>
+        <div class="code-block" id="mongo-url">mongodb+srv://admin:MyP@ssw0rd@cluster0.abc123.mongodb.net/mydb</div>
+
+        <label>PostgreSQL URL</label>
+        <div class="code-block" id="pg-url">postgresql://dbuser:secret@db.example.com:5432/production</div>
+      </div>
+
+      <div class="section">
+        <h2>Config Object — Firebase / Supabase</h2>
+        <p>Detects config objects that contain embedded secrets.</p>
+        <div class="code-block" id="firebase-config">const firebaseConfig = {
+  apiKey: "AIzaSyABCDEF1234567890abcdefghij",
+  authDomain: "myapp-12345.firebaseapp.com",
+  databaseURL: "https://myapp-12345-default-rtdb.firebaseio.com",
+  storageBucket: "myapp-12345.appspot.com"
+};</div>
+      </div>
+
+      <div class="section">
+        <h2>Plain Text — Embedded PII</h2>
+        <p>Detects PII embedded in paragraphs and descriptions.</p>
+        <p id="text-pii">
+          Contact <strong>Jane Smith</strong> at jane.smith@company.io or call
+          +44-20-7946-0958. Payment processed on Visa ending 5555 5555 5555 4444.
+          Reference: 987-65-4321.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Expected sanitized payload ──────────────────────────────────────── -->
+  <div class="section">
+    <h2>Expected Sanitized Payload (visible in extension popup → Payload tab)</h2>
+    <p>After scanning, the extension popup Payload tab should show something like this — with raw values replaced by placeholder tokens.</p>
+    <div class="code-block">{
+  "email":         "[EMAIL]",
+  "password":      "[PASSWORD]",
+  "phone":         "[PHONE]",
+  "card":          "[CARD]",
+  "gov_id":        "[GOV_ID]",
+  "openai_key":    "[OPENAI_KEY]",
+  "stripe_key":    "[STRIPE_KEY]",
+  "github_token":  "[GITHUB_TOKEN]",
+  "aws_key":       "[AWS_KEY]",
+  "jwt_secret":    "[JWT_SECRET]",
+  "mongodb_url":   "[MONGODB_URL]",
+  "postgres_url":  "[POSTGRES_URL]",
+  "firebase_config": "[FIREBASE_CONFIG]"
+}</div>
+  </div>
+
+  <!-- ── Manual check steps ───────────────────────────────────────────────── -->
+  <div class="section">
+    <h2>Manual Test Checklist</h2>
+    <ul class="checklist">
+      <li>☐ &nbsp;Colored overlays appear on this page within 1 second of loading</li>
+      <li>☐ &nbsp;Extension badge (toolbar icon) shows a number (e.g. "12")</li>
+      <li>☐ &nbsp;Click extension icon → Risk Score is above 50</li>
+      <li>☐ &nbsp;Items tab shows all detected types with confidence %</li>
+      <li>☐ &nbsp;Payload tab shows only [PLACEHOLDER] tokens, no raw values</li>
+      <li>☐ &nbsp;Click "View" on any item → modal shows selector, xpath, bounding box</li>
+      <li>☐ &nbsp;Click "Hide" overlays → overlays disappear from page</li>
+      <li>☐ &nbsp;Click "Show" overlays → overlays reappear</li>
+    </ul>
+  </div>
+
+  <footer>Privacy Firewall v1.0 — Test Page — No data is sent to any server.</footer>
+
+</body>
+</html>

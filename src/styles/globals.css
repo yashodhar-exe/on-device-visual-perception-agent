@@ -1,7 +1,6 @@
+/* globals.css — Privacy Firewall Extension */
+
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 :root {
   --bg: #F4F5F7;
@@ -19,6 +18,20 @@
   --mono: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg);
+  width: 420px;
+  min-height: 580px;
+  max-height: 700px;
+  overflow-x: hidden;
+}
+
+/* Dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0F1117;
@@ -33,26 +46,5 @@
   }
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--bg);
-  width: 420px;
-  min-height: 580px;
-  max-height: 700px;
-  overflow-x: hidden;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: var(--font); }
-
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
