@@ -1,0 +1,247 @@
+[
+  {
+    "id": "email_01",
+    "text": "EMAIL=student@example.com",
+    "expected_type": "EMAIL",
+    "sensitive": true,
+    "category": "PII"
+  },
+  {
+    "id": "email_02",
+    "text": "Contact our security officer at ciso.compliance@delhi.gov.in immediately",
+    "expected_type": "EMAIL",
+    "sensitive": true,
+    "category": "PII"
+  },
+  {
+    "id": "phone_in_01",
+    "text": "Call verification hotline at +91 9876543210 for OTP dispatch",
+    "expected_type": "PHONE",
+    "sensitive": true,
+    "category": "PII"
+  },
+  {
+    "id": "phone_us_01",
+    "text": "Direct line: (555) 234-5678 extension 4",
+    "expected_type": "PHONE",
+    "sensitive": true,
+    "category": "PII"
+  },
+  {
+    "id": "aadhaar_valid_01",
+    "text": "Aadhaar UID: 2345 6789 0124",
+    "expected_type": "AADHAAR",
+    "sensitive": true,
+    "category": "GOV_ID"
+  },
+  {
+    "id": "aadhaar_valid_02",
+    "text": "Resident ID: 9876-5432-1096",
+    "expected_type": "AADHAAR",
+    "sensitive": true,
+    "category": "GOV_ID"
+  },
+  {
+    "id": "pan_valid_01",
+    "text": "Permanent Account Number: ABCDE1234F",
+    "expected_type": "PAN",
+    "sensitive": true,
+    "category": "GOV_ID"
+  },
+  {
+    "id": "pan_valid_02",
+    "text": "PAN=BKZPS9871M",
+    "expected_type": "PAN",
+    "sensitive": true,
+    "category": "GOV_ID"
+  },
+  {
+    "id": "card_valid_01",
+    "text": "Primary Visa: 4111 1111 1111 1111",
+    "expected_type": "CARD",
+    "sensitive": true,
+    "category": "FINANCIAL"
+  },
+  {
+    "id": "card_valid_02",
+    "text": "Corporate Card: 5555-5555-5555-4444",
+    "expected_type": "CARD",
+    "sensitive": true,
+    "category": "FINANCIAL"
+  },
+  {
+    "id": "google_api_key_01",
+    "text": "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyA1234567890abcdef1234567890",
+    "expected_type": "GOOGLE_KEY",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "openai_key_01",
+    "text": "OPENAI_API_KEY=sk-proj-abc12345678901234567890testsecretkey",
+    "expected_type": "OPENAI_KEY",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "github_token_01",
+    "text": "GH_TOKEN=ghp_123456789012345678901234567890123456",
+    "expected_type": "GITHUB_TOKEN",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "jwt_token_01",
+    "text": "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+    "expected_type": "JWT_SECRET",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "stripe_key_01",
+    "text": "STRIPE_SECRET_KEY=sk_test_51Abcdefghijklmnopqrstuvw1234567890",
+    "expected_type": "STRIPE_KEY",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "postgres_url_01",
+    "text": "DATABASE_URL=postgres://dbuser:mypassword123@prod-db.internal:5432/core_banking",
+    "expected_type": "POSTGRES_URL",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "mongodb_url_01",
+    "text": "MONGO_URI=mongodb+srv://admin:clustersecret456@cluster0.mongodb.net/analytics?retryWrites=true",
+    "expected_type": "MONGODB_URL",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "ifsc_valid_01",
+    "text": "Bank Branch IFSC: SBIN0001234",
+    "expected_type": "IFSC",
+    "sensitive": true,
+    "category": "FINANCIAL"
+  },
+  {
+    "id": "aws_key_01",
+    "text": "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+    "expected_type": "AWS_KEY",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "razorpay_key_01",
+    "text": "RAZORPAY_KEY_ID=rzp_live_12345678901234",
+    "expected_type": "RAZORPAY_KEY",
+    "sensitive": true,
+    "category": "CREDENTIAL"
+  },
+  {
+    "id": "neg_public_url_01",
+    "text": "NEXT_PUBLIC_API_URL=http://localhost:5000",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_public_docs_01",
+    "text": "Documentation available at https://docs.smartindiahackathon.org/v2/guidelines",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_ui_button_01",
+    "text": "Submit Application Form",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_ui_nav_01",
+    "text": "Dashboard > Settings > Privacy Preferences > Notifications",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_brand_names_01",
+    "text": "Built with React, Next.js, Docker, TailwindCSS, and TypeScript",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_code_snippet_01",
+    "text": "const totalCount = items.filter(x => x.active).length; return totalCount;",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_invalid_card_01",
+    "text": "Tracking Reference: 1234 5678 1234 5678",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_invalid_aadhaar_01",
+    "text": "Order Batch Sequence: 1234 5678 9012",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_timestamp_01",
+    "text": "Report Generated at 2026-09-08 13:04:00 UTC",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_safe_css_01",
+    "text": "background-color: #3b82f6; border-radius: 8px; padding: 16px;",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_semantic_placeholder_01",
+    "text": "API_KEY=YOUR_API_KEY",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_semantic_placeholder_02",
+    "text": "EMAIL=YOUR_EMAIL",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_semantic_placeholder_03",
+    "text": "PASSWORD=YOUR_PASSWORD",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_safe_identifier_01",
+    "text": "SESSION_TIMEOUT_SECONDS=3600",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  },
+  {
+    "id": "neg_safe_identifier_02",
+    "text": "MAX_CONCURRENT_REQUESTS=10",
+    "expected_type": null,
+    "sensitive": false,
+    "category": "NON_SENSITIVE"
+  }
+]

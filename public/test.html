@@ -136,16 +136,16 @@
   <div class="section">
     <h2>What the extension should do</h2>
     <ul class="checklist">
-      <li><span class="dot red"></span>   <strong>Red overlay</strong> — Password field below</li>
+      <li><span class="dot red"></span>   <strong>Red overlay</strong> — Password field & Aadhaar/PAN Indian Gov IDs</li>
       <li><span class="dot blue"></span>  <strong>Blue overlay</strong> — Email address in the input and in plain text</li>
-      <li><span class="dot green"></span> <strong>Green overlay</strong> — Phone number</li>
-      <li><span class="dot purple"></span><strong>Purple overlay</strong> — Visa card number</li>
+      <li><span class="dot green"></span> <strong>Green overlay</strong> — Indian & International Phone numbers</li>
+      <li><span class="dot purple"></span><strong>Purple overlay</strong> — Visa card & Financial IFSC codes</li>
       <li><span class="dot orange"></span><strong>Orange overlays</strong> — OpenAI key, GitHub token, Stripe key, JWT, DB URLs, AWS key</li>
-      <li><span class="dot red"></span>   <strong>Red overlay</strong> — Social Security Number (Gov ID)</li>
+      <li><span class="dot yellow"></span><strong>Agent Tab</strong> — Local Vision + OCR + Screenshot Redaction + Fail-Closed VLM Verification</li>
     </ul>
     <p style="margin-top:12px;">
-      After overlays appear, click the <strong>extension icon</strong> in Chrome toolbar.
-      The popup should show a Risk Score and list all detected items.
+      After overlays appear, click the <strong>Privacy Firewall extension icon</strong> in Chrome toolbar.
+      Navigate to <strong>Agent</strong> tab to test the Browser Vision Agent, preview the pixel-blackout screenshot, and execute safe browser actions!
     </p>
   </div>
 
@@ -154,23 +154,38 @@
     <!-- ── Form inputs ──────────────────────────────────────────────────── -->
     <div>
       <div class="section">
-        <h2>Login Form — Inputs</h2>
+        <h2>Login & Identity Form — Inputs</h2>
         <p>The extension detects typed values inside input and textarea fields.</p>
-        <form id="login-form" autocomplete="off">
+        <form id="login-form" autocomplete="off" onsubmit="event.preventDefault(); alert('Form submitted!');">
           <label for="email-input">Email Address</label>
-          <input id="email-input" type="email" name="email" value="john.doe@example.com" />
+          <input id="email-input" type="email" name="email" value="rajesh.kumar@gov.in" />
 
           <label for="pw-input">Password</label>
           <input id="pw-input" type="password" name="password" value="SuperSecret@1234" />
 
-          <label for="phone-input">Phone Number</label>
-          <input id="phone-input" type="tel" name="phone" value="+1-415-867-5309" />
+          <label for="phone-input">Indian Phone Number</label>
+          <input id="phone-input" type="tel" name="phone" value="+91 9876543210" />
+
+          <label for="aadhaar-input">Aadhaar Number (Verhoeff Checksum Validated)</label>
+          <input id="aadhaar-input" type="text" name="aadhaar" value="2345 6789 0124" />
+
+          <label for="pan-input">Income Tax PAN Number</label>
+          <input id="pan-input" type="text" name="pan" value="ABCDE1234F" />
+
+          <label for="ifsc-input">Bank IFSC Code</label>
+          <input id="ifsc-input" type="text" name="ifsc" value="SBIN0001234" />
 
           <label for="card-input">Credit Card Number</label>
           <input id="card-input" type="text" name="card" value="4111 1111 1111 1111" />
 
-          <label for="ssn-input">Social Security Number</label>
-          <input id="ssn-input" type="text" name="ssn" value="123-45-6789" />
+          <div style="margin-top: 16px; display: flex; gap: 8px;">
+            <button type="submit" id="submit-btn" style="background:#2563EB; color:white; border:none; padding:8px 16px; border-radius:4px; font-weight:600; cursor:pointer;">
+              Submit Application
+            </button>
+            <button type="button" id="safe-scroll-btn" onclick="window.scrollBy({top: 300, behavior: 'smooth'})" style="background:#475569; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer;">
+              Safe Action (Scroll)
+            </button>
+          </div>
         </form>
       </div>
 
@@ -211,10 +226,22 @@
       </div>
 
       <div class="section">
+        <h2>Environment Secrets (.env) — Semantic Redaction Demo</h2>
+        <p>Demonstrates preserving surrounding context and variable names while redacting only the secret values.</p>
+        <div class="code-block" id="env-secrets">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyREALVALUE
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJREALJWTheader.eyJREALJWTpayload.REALJWTsig
+SUPABASE_SERVICE_ROLE_KEY=eyJREALJWTheader.eyJREALJWTpayload.REALJWTsig
+STRIPE_SECRET_KEY=sk_test_REALVALUE
+DATABASE_URL=postgresql://user:password@host/db
+NEXT_PUBLIC_API_URL=http://localhost:5000
+NEXT_PUBLIC_SUPABASE_URL=https://abcd1234xyz.supabase.co</div>
+      </div>
+
+      <div class="section">
         <h2>Config Object — Firebase / Supabase</h2>
         <p>Detects config objects that contain embedded secrets.</p>
         <div class="code-block" id="firebase-config">const firebaseConfig = {
-  apiKey: "AIzaSyABCDEF1234567890abcdefghij",
+  apiKey: "AIzaSyABCDEF1234567890abcdefghijklmnopqrst",
   authDomain: "myapp-12345.firebaseapp.com",
   databaseURL: "https://myapp-12345-default-rtdb.firebaseio.com",
   storageBucket: "myapp-12345.appspot.com"
@@ -272,5 +299,6 @@
 
   <footer>Privacy Firewall v1.0 — Test Page — No data is sent to any server.</footer>
 
+  <script src="content.js"></script>
 </body>
 </html>

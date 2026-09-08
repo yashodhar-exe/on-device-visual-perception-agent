@@ -1,0 +1,98 @@
+{
+  "chromeScreenshotCapture": {
+    "mean": 78.999,
+    "p50": 71.263,
+    "p90": 85.81,
+    "p95": 92.85,
+    "min": 51.607,
+    "max": 295.912
+  },
+  "privacyDetection": {
+    "mean": 0.053,
+    "p50": 0,
+    "p90": 0.1,
+    "p95": 0.1,
+    "min": 0,
+    "max": 0.6
+  },
+  "hybridFusion": {
+    "mean": 0.03,
+    "p50": 0,
+    "p90": 0.1,
+    "p95": 0.1,
+    "min": 0,
+    "max": 0.2
+  },
+  "screenshotCanvasRedaction": {
+    "mean": 7.293,
+    "p50": 6.5,
+    "p90": 8.3,
+    "p95": 8.7,
+    "min": 4.7,
+    "max": 35.5
+  },
+  "accessibilityExtraction": {
+    "mean": 0.01,
+    "p50": 0,
+    "p90": 0,
+    "p95": 0,
+    "min": 0,
+    "max": 0.3
+  },
+  "domSanitization": {
+    "mean": 0.003,
+    "p50": 0,
+    "p90": 0,
+    "p95": 0,
+    "min": 0,
+    "max": 0.1
+  },
+  "policyValidation": {
+    "mean": 0.007,
+    "p50": 0,
+    "p90": 0,
+    "p95": 0.1,
+    "min": 0,
+    "max": 0.1
+  },
+  "networkToFastAPI": {
+    "mean": 3.757,
+    "p50": 3.5,
+    "p90": 5.1,
+    "p95": 5.3,
+    "min": 2.6,
+    "max": 8.7
+  },
+  "vlmInferenceFallback": {
+    "mean": 2.833,
+    "p50": 1.071,
+    "p90": 12.985,
+    "p95": 13.342,
+    "min": 0.357,
+    "max": 16.732
+  },
+  "actionPlanning": {
+    "mean": 0.044,
+    "p50": 0.04,
+    "p90": 0.059,
+    "p95": 0.068,
+    "min": 0.038,
+    "max": 0.116
+  },
+  "localSymbolicResolution": {
+    "mean": 0,
+    "p50": 0,
+    "p90": 0,
+    "p95": 0,
+    "min": 0,
+    "max": 0
+  },
+  "browserActionExecution": {
+    "mean": 0.02,
+    "p50": 0,
+    "p90": 0,
+    "p95": 0.1,
+    "min": 0,
+    "max": 0.5
+  }
+}

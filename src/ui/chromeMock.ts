@@ -5,7 +5,7 @@
  * Does NOT overwrite an existing chrome global (real extension context).
  */
 
-import { ExtensionState, ScanResult } from '../core/types';
+import { ExtensionState, ScanResult, DEFAULT_SETTINGS, ScanMetrics } from '../core/types';
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,15 @@ const mockScan: ScanResult = {
     credit_card: '[CARD]',
     api_key: '[API_KEY]',
   },
+  metrics: {
+    domScanMs: 12.4,
+    regexMs: 12.4,
+    nerMs: 5.1,
+    ocrMs: 0,
+    faceMs: 0.2,
+    overlayRenderMs: 3.8,
+    totalMs: 21.5,
+  } as ScanMetrics,
   items: [
     {
       id: 'pf-mock-1',
@@ -113,6 +122,9 @@ const mockState: ExtensionState = {
   enabled: true,
   currentUrl: 'https://example.com/login',
   currentTabId: 1,
+  scanStatus: 'success',
+  scanErrorReason: null,
+  scanErrorMessage: null,
   lastScan: mockScan,
   stats: { protected: 3, blocked: 2, warnings: 0 },
   activityLog: [
@@ -123,6 +135,16 @@ const mockState: ExtensionState = {
     { id: 'e5', timestamp: Date.now() - 6000, type: 'CARD', action: 'Sanitized payload generated', url: 'https://example.com' },
   ],
   overlaysVisible: true,
+  settings: { ...DEFAULT_SETTINGS },
+  lastMetrics: {
+    domScanMs: 12.4,
+    regexMs: 12.4,
+    nerMs: 5.1,
+    ocrMs: 0,
+    faceMs: 0.2,
+    overlayRenderMs: 3.8,
+    totalMs: 21.5,
+  } as ScanMetrics,
 };
 
 // ─── Install mock if we're not in a real extension context ──────────────────
@@ -134,7 +156,13 @@ if (!w.chrome || !w.chrome.runtime) {
     runtime: {
       sendMessage: (_msg: any, cb?: Function) => {
         setTimeout(() => {
-          if (cb) cb({ state: mockState, result: mockScan });
+          if (!cb) return;
+          const msg = _msg as { type: string };
+          if (msg.type === 'GET_STATE') cb({ state: mockState });
+          else if (msg.type === 'GET_SETTINGS') cb({ settings: mockState.settings });
+          else if (msg.type === 'SAVE_SETTINGS') cb({ ok: true });
+          else if (msg.type === 'GET_REPORT') cb({ report: null });
+          else cb({ state: mockState, result: mockScan });
         }, 0);
       },
       onMessage: {
@@ -156,8 +184,14 @@ if (!w.chrome || !w.chrome.runtime) {
     },
     storage: {
       local: {
-        get: () => Promise.resolve({ pfState: mockState }),
+        get: () => Promise.resolve({ pfSettings: { enabled: true, overlaysVisible: false, activityLog: [], settings: DEFAULT_SETTINGS } }),
         set: () => Promise.resolve(),
+        remove: () => Promise.resolve(),
+      },
+      session: {
+        get: () => Promise.resolve({ pfScan: mockScan }),
+        set: () => Promise.resolve(),
+        remove: () => Promise.resolve(),
       },
     },
     action: {

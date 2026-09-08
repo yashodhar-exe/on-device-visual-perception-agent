@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "commonjs",
+    "outDir": "./public",
+    "strict": false,
+    "isolatedModules": false
+  },
+  "include": [
+    "src/content",
+    "src/background",
+    "src/core",
+    "src/detectors",
+    "src/sanitization",
+    "src/network",
+    "src/capture",
+    "src/vision",
+    "src/ocr",
+    "src/privacy",
+    "src/actions",
+    "src/overlays",
+    "src/workers",
+    "src/chrome-types.d.ts"
+  ]
+}

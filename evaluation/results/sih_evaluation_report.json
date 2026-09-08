@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-09-08T07:44:15.767Z",
+  "benchmarkVersion": "1.0.0-sih-audit",
+  "agentEngineStatus": {
+    "activeEngine": "Deterministic structured action planner",
+    "neuralVlmEngine": "Qwen/Qwen2.5-VL-3B-Instruct (architectural fallback, weights optional/not loaded)",
+    "status": "VERIFIED_DETERMINISTIC_ACTIVE"
+  },
+  "metrics": {
+    "metric1_visualContextAccuracy": {
+      "weight": "25%",
+      "structuredFidelity": 1,
+      "actionableRecall": 1,
+      "roleAccuracy": 1,
+      "localizationRate": 1,
+      "isProxy": true,
+      "disclosure": "Evaluated as client-side structured screen state extraction. Open-domain zero-shot VLM is optional/architectural."
+    },
+    "metric2_piiPrecisionRecall": {
+      "weight": "20%",
+      "precision": 0.9091,
+      "recall": 1,
+      "f1": 0.9524,
+      "accuracy": 0.9429,
+      "totalCases": 35,
+      "tp": 20,
+      "fp": 2,
+      "fn": 0,
+      "tn": 13
+    },
+    "metric3_redactionPrecision": {
+      "weight": "20%",
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "totalSensitiveRegions": 6,
+      "missedRegions": 0,
+      "overRedactedRegions": 0
+    },
+    "metric4_clientResourceUtilization": {
+      "weight": "20%",
+      "bundleSizeMb": 1.63,
+      "screenshotCapture_p50_ms": 71.263,
+      "canvasRedaction_p50_ms": 6.5,
+      "piiDetection_p50_ms": 0.05,
+      "policyCheck_p50_ms": 0.01,
+      "estimatedCpuPercent": "< 5% avg"
+    },
+    "metric5_endToEndLatency": {
+      "weight": "15%",
+      "p50_ms": 81.58,
+      "p90_ms": 96.27,
+      "p95_ms": 101.16,
+      "min_ms": 58.74,
+      "max_ms": 228.43,
+      "localPreprocessing_p50_ms": 77.9,
+      "networkAndServer_p50_ms": 3.64,
+      "clientActionExecution_p50_ms": 0.04
+    }
+  },
+  "privacyEnforcement": {
+    "rawSecretsTested": 6,
+    "rawSecretsBlocked": 5,
+    "sanitizedPayloadAllowed": true,
+    "httpErrorCodeOnViolation": 422,
+    "violationErrorType": "POLICY_VIOLATION",
+    "symbolicCredentialsSupported": [
+      "LOCAL_EMAIL",
+      "LOCAL_PASSWORD",
+      "LOCAL_NAME"
+    ]
+  }
+}

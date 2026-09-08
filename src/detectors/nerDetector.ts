@@ -1,18 +1,17 @@
 /**
  * nerDetector.ts
  *
- * Named Entity Recognition for Names, Addresses, and other PII
- * that cannot be reliably caught with regex alone.
+ * Named Entity Recognition for Names and Addresses.
  *
  * Architecture:
- * - Primary: winkNLP with its built-in NER (runs in-browser, no server needed)
- * - Fallback: heuristic patterns when winkNLP is unavailable
- *
- * NOTE: In a production build, wire in a quantized ONNX BERT model or
- * distilbert-base-uncased-finetuned-ner via onnxruntime-web for higher accuracy.
+ * - Local ONNX NER model via @xenova/transformers (Xenova/bert-base-NER or distilbert)
+ * - Deterministic street address format recognition
+ * - NO heuristic capitalized-word pattern matching (to eliminate false positives)
+ * - All outputs filtered against allowlist.ts
  */
 
-import { DetectionType, LocationInfo } from '../core/types';
+import { DetectionType } from '../core/types';
+import { isAllowlisted } from './allowlist';
 
 export interface NerMatch {
   type: DetectionType;
@@ -20,90 +19,106 @@ export interface NerMatch {
   confidence: number;
 }
 
-// ─── Heuristic name detection ─────────────────────────────────────────────────
+// ─── ONNX Transformers.js NER Pipeline ─────────────────────────────────────────
 
-// Common first-name prefix patterns (Mr., Ms., Dr., etc.)
-const TITLE_PATTERN = /\b(?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?|Prof\.?|Sir|Lady)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+let nerPipeline: any = null;
+let pipelineLoading = false;
 
-// Two or three capitalized words not at sentence start
-const PROPER_NAME_PATTERN = /(?<!\.\s{0,3})\b([A-Z][a-z]{2,})\s+([A-Z][a-z]{2,})(?:\s+([A-Z][a-z]{2,}))?\b/g;
+async function getNerPipeline(): Promise<any> {
+  if (nerPipeline) return nerPipeline;
+  if (pipelineLoading) return null;
 
-// Common name-labelling HTML attributes
-const NAME_ATTR_HINTS = ['name', 'fullname', 'full_name', 'full-name', 'author', 'firstname', 'lastname'];
+  try {
+    pipelineLoading = true;
+    const { pipeline, env } = await import('@xenova/transformers');
+    env.allowLocalModels = true;
+    env.allowRemoteModels = false;
+    const pipelinePromise = pipeline('token-classification', 'Xenova/bert-base-NER', {
+      quantized: true,
+    });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('NER pipeline initialization timeout')), 1000)
+    );
+    nerPipeline = await Promise.race([pipelinePromise, timeoutPromise]);
+    return nerPipeline;
+  } catch (err) {
+    // If ONNX pipeline fails to load or download, log warning and return null cleanly
+    console.warn('[PrivacyFirewall] Local ONNX NER pipeline initialization deferred/skipped:', err);
+    return null;
+  } finally {
+    pipelineLoading = false;
+  }
+}
 
-// ─── Address heuristics ───────────────────────────────────────────────────────
+// ─── Deterministic Address Heuristics ─────────────────────────────────────────
 
-const ADDRESS_PATTERN =
-  /\b\d{1,5}\s+(?:[A-Z][a-z]+\s){1,4}(?:St(?:reet)?|Ave(?:nue)?|Blvd|Rd|Road|Dr(?:ive)?|Ln|Lane|Ct|Court|Pl|Place|Way|Circle|Cir|Pkwy|Parkway|Terrace|Ter)\.?(?:\s+(?:Apt|Suite|Ste|Unit|#)\s*[\w-]+)?\b/gi;
+// Street address pattern with number + street name + suffix (e.g. 123 Main St)
+const STREET_ADDRESS_PATTERN =
+  /\b\d{1,5}\s+(?:[A-Z][a-z]+\s){1,3}(?:St(?:reet)?|Ave(?:nue)?|Blvd|Rd|Road|Dr(?:ive)?|Ln|Lane|Ct|Court|Pl|Place|Way|Circle|Cir|Pkwy|Parkway|Ter(?:race)?)\.?(?:\s+(?:Apt|Suite|Ste|Unit|#)\s*[\w-]+)?\b/gi;
 
-const ZIP_CODE_PATTERN = /\b\d{5}(?:-\d{4})?\b/g;
+const CITY_STATE_ZIP_PATTERN =
+  /\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)?,\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\s+\d{5}(?:-\d{4})?\b/gi;
 
-const CITY_STATE_PATTERN =
-  /\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)?,\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\b/g;
+// Common name-labelling HTML attributes for form field detection
+const NAME_ATTR_HINTS = ['name', 'fullname', 'full_name', 'full-name', 'author', 'firstname', 'lastname', 'owner'];
 
-// ─── Run NER on a text chunk ──────────────────────────────────────────────────
+// ─── Main NER Entry Point ──────────────────────────────────────────────────────
 
-export function runNer(text: string): NerMatch[] {
+export async function runNer(text: string): Promise<NerMatch[]> {
   const results: NerMatch[] = [];
   const seen = new Set<string>();
 
   const addResult = (type: DetectionType, value: string, confidence: number) => {
-    const key = `${type}:${value}`;
-    if (!seen.has(key) && value.trim().length > 0) {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 3) return;
+    if (isAllowlisted(trimmed)) return;
+
+    const key = `${type}:${trimmed.toLowerCase()}`;
+    if (!seen.has(key)) {
       seen.add(key);
-      results.push({ type, value: value.trim(), confidence });
+      results.push({ type, value: trimmed, confidence });
     }
   };
 
-  // Names via titles
-  TITLE_PATTERN.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = TITLE_PATTERN.exec(text)) !== null) {
-    addResult('NAME', m[0], 0.9);
-  }
+  // 1. Run local ONNX NER model if pipeline is ready
+  const pipe = await getNerPipeline();
+  if (pipe) {
+    try {
+      const output = await pipe(text, { ignore_labels: ['O'] });
+      if (Array.isArray(output)) {
+        for (const item of output) {
+          const entity = item.entity || item.entity_group;
+          const word = (item.word || '').replace(/^##/, '').trim();
+          const score = typeof item.score === 'number' ? item.score : 0.85;
 
-  // Proper names (two consecutive capitalized words)
-  PROPER_NAME_PATTERN.lastIndex = 0;
-  while ((m = PROPER_NAME_PATTERN.exec(text)) !== null) {
-    // Filter out known false positives (headings, brand names, etc.)
-    const candidate = m[0];
-    if (!isLikelyFalsePositive(candidate)) {
-      addResult('NAME', candidate, 0.7);
+          if (score < 0.6) continue;
+
+          if (entity?.includes('PER') || entity?.includes('PERSON')) {
+            addResult('NAME', word, Math.round(score * 100) / 100);
+          } else if (entity?.includes('LOC') || entity?.includes('LOCATION')) {
+            addResult('ADDRESS', word, Math.round(score * 100) / 100);
+          }
+        }
+      }
+    } catch (e) {
+      // ONNX inference error fallback
     }
   }
 
-  // Street addresses
-  ADDRESS_PATTERN.lastIndex = 0;
-  while ((m = ADDRESS_PATTERN.exec(text)) !== null) {
+  // 2. Deterministic Street Addresses (e.g., "123 Main St")
+  STREET_ADDRESS_PATTERN.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = STREET_ADDRESS_PATTERN.exec(text)) !== null) {
+    addResult('ADDRESS', m[0], 0.90);
+  }
+
+  // 3. City, State ZIP combos
+  CITY_STATE_ZIP_PATTERN.lastIndex = 0;
+  while ((m = CITY_STATE_ZIP_PATTERN.exec(text)) !== null) {
     addResult('ADDRESS', m[0], 0.88);
   }
 
-  // City, State combos
-  CITY_STATE_PATTERN.lastIndex = 0;
-  while ((m = CITY_STATE_PATTERN.exec(text)) !== null) {
-    addResult('ADDRESS', m[0], 0.75);
-  }
-
   return results;
-}
-
-// ─── False positive filter for proper names ───────────────────────────────────
-
-const COMMON_FALSE_POSITIVES = new Set([
-  'New York', 'Los Angeles', 'San Francisco', 'San Diego', 'Las Vegas',
-  'United States', 'United Kingdom', 'North America', 'South America',
-  'Privacy Policy', 'Terms Of', 'Sign In', 'Log In', 'Sign Up',
-  'Learn More', 'Read More', 'Click Here', 'View All',
-  'January February', 'Monday Tuesday',
-]);
-
-function isLikelyFalsePositive(name: string): boolean {
-  if (COMMON_FALSE_POSITIVES.has(name)) return true;
-  // All-caps = acronym
-  if (name === name.toUpperCase()) return true;
-  // Very short
-  if (name.replace(/\s+/g, '').length < 5) return true;
-  return false;
 }
 
 // ─── Detect names from form field attributes ──────────────────────────────────
@@ -114,9 +129,8 @@ export function detectNameFromElement(el: Element): boolean {
     el.getAttribute('id')?.toLowerCase(),
     el.getAttribute('autocomplete')?.toLowerCase(),
     el.getAttribute('placeholder')?.toLowerCase(),
+    el.getAttribute('aria-label')?.toLowerCase(),
   ].filter(Boolean) as string[];
 
-  return attrs.some((a) =>
-    NAME_ATTR_HINTS.some((hint) => a.includes(hint))
-  );
+  return attrs.some((a) => NAME_ATTR_HINTS.some((hint) => a.includes(hint)));
 }

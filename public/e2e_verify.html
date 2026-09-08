@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>E2E Network Verification Page</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #fff; color: #111; }
+    .env-block { white-space: pre; border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+    input { display: block; margin: 5px 0 15px; padding: 5px; width: 300px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>E2E Test Environment</h1>
+
+  <div id="env-secrets" class="env-block">NEXT_PUBLIC_API_URL=http://localhost:5000
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=REAL_GOOGLE_KEY_123456
+NEXT_PUBLIC_SUPABASE_ANON_KEY=REAL_SUPABASE_KEY_123456
+SUPABASE_SERVICE_ROLE_KEY=REAL_SERVICE_ROLE_KEY_123456</div>
+
+  <form id="auth-form">
+    <label for="email-field">Email:</label>
+    <input id="email-field" type="email" value="test@example.com" />
+
+    <label for="password-field">Password:</label>
+    <input id="password-field" type="password" value="RealPassword123" />
+  </form>
+</body>
+</html>

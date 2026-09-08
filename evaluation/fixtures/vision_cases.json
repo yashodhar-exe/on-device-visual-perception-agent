@@ -1,0 +1,182 @@
+[
+  {
+    "scenarioId": "auth_form",
+    "name": "User Authentication Form",
+    "url": "https://auth.internal.service/login",
+    "viewport": { "width": 1200, "height": 800 },
+    "elements": [
+      {
+        "id": "el_email",
+        "selector": "#email-input",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "Email Address",
+        "value": "user.test@corporation.org",
+        "boundingBox": { "x": 100, "y": 150, "width": 320, "height": 40 },
+        "isSensitive": true,
+        "expectedPlaceholder": "YOUR_EMAIL",
+        "isActionable": true
+      },
+      {
+        "id": "el_password",
+        "selector": "#password-input",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "Account Password",
+        "value": "TopSecretPassword123!",
+        "boundingBox": { "x": 100, "y": 210, "width": 320, "height": 40 },
+        "isSensitive": true,
+        "expectedPlaceholder": "YOUR_PASSWORD",
+        "isActionable": true
+      },
+      {
+        "id": "el_submit",
+        "selector": "#login-submit-btn",
+        "tagName": "BUTTON",
+        "role": "button",
+        "label": "Sign In to Account",
+        "value": "Sign In",
+        "boundingBox": { "x": 100, "y": 270, "width": 140, "height": 44 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": true
+      },
+      {
+        "id": "el_forgot",
+        "selector": "#forgot-password-link",
+        "tagName": "A",
+        "role": "link",
+        "label": "Forgot Password?",
+        "value": "Forgot Password?",
+        "boundingBox": { "x": 260, "y": 280, "width": 160, "height": 24 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": true
+      },
+      {
+        "id": "el_notice",
+        "selector": ".security-notice",
+        "tagName": "P",
+        "role": "paragraph",
+        "label": "Security Notice",
+        "value": "Protected by 256-bit encryption. Do not share credentials.",
+        "boundingBox": { "x": 100, "y": 340, "width": 400, "height": 20 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": false
+      }
+    ]
+  },
+  {
+    "scenarioId": "cloud_settings",
+    "name": "Cloud API Key & Database Settings",
+    "url": "https://console.cloud-provider.io/project/keys",
+    "viewport": { "width": 1200, "height": 800 },
+    "elements": [
+      {
+        "id": "el_api_key",
+        "selector": "#gmap-api-key",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "Google Maps API Key",
+        "value": "AIzaSyD-1234567890abcdef1234567890test",
+        "boundingBox": { "x": 120, "y": 140, "width": 450, "height": 38 },
+        "isSensitive": true,
+        "expectedPlaceholder": "YOUR_GOOGLE_MAPS_API_KEY",
+        "isActionable": true
+      },
+      {
+        "id": "el_db_uri",
+        "selector": "#postgres-uri",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "Production PostgreSQL URI",
+        "value": "postgres://prod_admin:SecretPass999@db.prod.internal:5432/app",
+        "boundingBox": { "x": 120, "y": 210, "width": 450, "height": 38 },
+        "isSensitive": true,
+        "expectedPlaceholder": "YOUR_POSTGRES_URL",
+        "isActionable": true
+      },
+      {
+        "id": "el_save_btn",
+        "selector": "#btn-save-credentials",
+        "tagName": "BUTTON",
+        "role": "button",
+        "label": "Save Changes",
+        "value": "Save Changes",
+        "boundingBox": { "x": 120, "y": 280, "width": 160, "height": 42 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": true
+      },
+      {
+        "id": "el_docs_link",
+        "selector": "#docs-link",
+        "tagName": "A",
+        "role": "link",
+        "label": "View API Security Documentation",
+        "value": "View Documentation",
+        "boundingBox": { "x": 300, "y": 290, "width": 180, "height": 22 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": true
+      }
+    ]
+  },
+  {
+    "scenarioId": "kyc_portal",
+    "name": "Citizen KYC Verification Portal",
+    "url": "https://portal.kyc-verification.gov.in/identity",
+    "viewport": { "width": 1200, "height": 800 },
+    "elements": [
+      {
+        "id": "el_citizen_name",
+        "selector": "#full-name-input",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "Full Name as per Aadhaar",
+        "value": "Rajesh Kumar Sharma",
+        "boundingBox": { "x": 150, "y": 120, "width": 350, "height": 36 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": true
+      },
+      {
+        "id": "el_aadhaar_input",
+        "selector": "#aadhaar-input",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "12-digit Aadhaar UID",
+        "value": "2345 6789 0124",
+        "boundingBox": { "x": 150, "y": 180, "width": 350, "height": 36 },
+        "isSensitive": true,
+        "expectedPlaceholder": "YOUR_AADHAAR",
+        "isActionable": true
+      },
+      {
+        "id": "el_pan_input",
+        "selector": "#pan-input",
+        "tagName": "INPUT",
+        "role": "textbox",
+        "label": "10-character PAN Card",
+        "value": "ABCDE1234F",
+        "boundingBox": { "x": 150, "y": 240, "width": 350, "height": 36 },
+        "isSensitive": true,
+        "expectedPlaceholder": "YOUR_PAN",
+        "isActionable": true
+      },
+      {
+        "id": "el_verify_btn",
+        "selector": "#btn-verify-kyc",
+        "tagName": "BUTTON",
+        "role": "button",
+        "label": "Verify KYC Record",
+        "value": "Submit Verification",
+        "boundingBox": { "x": 150, "y": 300, "width": 180, "height": 44 },
+        "isSensitive": false,
+        "expectedPlaceholder": null,
+        "isActionable": true
+      }
+    ]
+  }
+]
