@@ -13,6 +13,7 @@
 
 import { AgentAction, ActionResult, SensitiveRegion } from '../core/types';
 import { requestUserConfirmation } from './confirmationHook';
+import { evaluatePageContext } from '../privacy/contextPolicyEngine';
 
 const ALLOWED_ACTIONS = new Set([
   'click',
@@ -23,6 +24,7 @@ const ALLOWED_ACTIONS = new Set([
   'focus',
   'submit',
   'wait',
+  'press_key',
 ]);
 
 const MALICIOUS_SELECTOR_PATTERNS = [
@@ -67,12 +69,14 @@ export function validateAction(action: AgentAction): { valid: boolean; reason?: 
 /**
  * Resolves an action's value, preferring client-side symbolic reference (LOCAL_*)
  * so that raw sensitive credentials never leave the browser.
+ * If credentials are not allowed by policy, returns unauthenticated fallback.
  */
 export function resolveActionValue(
   action: AgentAction,
-  localTokens: Record<string, string> = {}
+  localTokens: Record<string, string> = {},
+  allowCredentials = true
 ): string {
-  if (action.valueRef && localTokens[action.valueRef]) {
+  if (allowCredentials && action.valueRef && localTokens[action.valueRef]) {
     return localTokens[action.valueRef];
   }
   return action.text || action.value || '';
@@ -101,11 +105,13 @@ export class ActionExecutor {
 
   /**
    * Validates and executes an agent action.
+   * Independently re-evaluates page context prior to execution.
    */
   async execute(
     action: AgentAction,
     sensitiveRegions: SensitiveRegion[] = [],
-    autoConfirmSafe = true
+    autoConfirmSafe = true,
+    targetUrl?: string
   ): Promise<ActionResult> {
     const timestamp = Date.now();
 
@@ -120,6 +126,16 @@ export class ActionExecutor {
       };
     }
 
+    // 2. Re-check current context immediately prior to execution
+    const contextPolicy = evaluatePageContext(targetUrl);
+    if (!contextPolicy.allowAgentActions || contextPolicy.policy === 'BLOCK_ALL') {
+      return {
+        action,
+        success: false,
+        timestamp,
+        error: `Action rejected by security policy: page is in blocked context (${contextPolicy.context}: ${contextPolicy.reason})`,
+      };
+    }
 
     // Handle non-selector actions
     if (action.action === 'wait') {
@@ -132,54 +148,45 @@ export class ActionExecutor {
       return this.executeScroll(action, timestamp);
     }
 
-    // 3. Locate target element
-    if (!action.selector) {
-      return {
-        action,
-        success: false,
-        timestamp,
-        error: 'Action requires a valid selector',
-      };
-    }
-
-    let targetEl: Element | null = null;
-    try {
-      targetEl = document.querySelector(action.selector);
-    } catch (err) {
-      return {
-        action,
-        success: false,
-        timestamp,
-        error: `Invalid CSS selector: ${action.selector}`,
-      };
-    }
-
+    // 3. Locate target element using targeting hierarchy:
+    // (DOM selector -> target ID/name -> accessibility role/label -> bounding box)
+    const targetEl = this.findTargetElement(action);
     if (!targetEl) {
       return {
         action,
         success: false,
         timestamp,
-        error: `Element not found for selector: ${action.selector}`,
+        error: `Element not found for target/selector: ${action.selector || action.target || 'unknown'}`,
       };
     }
 
-    // 4. Verify target visibility
+    // 4. Verify target visibility & presence
     const rect = targetEl.getBoundingClientRect();
-    const isVisible = rect.width > 0 && rect.height > 0;
-    if (!isVisible) {
+    const style = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(targetEl) : null;
+    const isExplicitlyHidden = style && (style.display === 'none' || style.visibility === 'hidden');
+    if (isExplicitlyHidden) {
       return {
         action,
         success: false,
         timestamp,
-        error: `Target element is hidden or zero-dimensioned: ${action.selector}`,
+        error: `Target element is hidden (display: none or visibility: hidden): ${action.selector || action.target}`,
       };
     }
 
-    // 5. Determine if action requires user confirmation
+    // 5. Determine if action requires user confirmation or targets protected credentials
+    const isCredentialTarget =
+      /password|pass|pwd|card|cvv|pay|auth|delete|api[-_]?key|secret|token|credential/i.test(
+        action.selector || ''
+      ) ||
+      /password|pass|pwd|card|cvv|pay|auth|delete|api[-_]?key|secret|token|credential/i.test(
+        action.target || ''
+      ) ||
+      (targetEl instanceof HTMLInputElement && targetEl.type === 'password');
+
     const isSensitiveAction =
       action.requiresConfirmation ||
       action.action === 'submit' ||
-      /password|pass|pwd|card|cvv|pay|auth|delete/i.test(action.selector);
+      isCredentialTarget;
 
     if (isSensitiveAction && !autoConfirmSafe) {
       const authorized = await requestUserConfirmation(action);
@@ -188,7 +195,7 @@ export class ActionExecutor {
           action,
           success: false,
           timestamp,
-          error: 'User denied authorization for sensitive action',
+          error: 'Action rejected by security policy: agent cannot perform unauthorized credential actions or exfiltrate secrets',
         };
       }
     }
@@ -201,7 +208,11 @@ export class ActionExecutor {
           break;
 
         case 'type':
-          await this.executeType(targetEl, action);
+          await this.executeType(targetEl, action, contextPolicy.allowCredentialResolution);
+          break;
+
+        case 'press_key':
+          await this.executePressKey(targetEl, action.value || action.text || 'Enter');
           break;
 
         case 'select':
@@ -247,6 +258,100 @@ export class ActionExecutor {
     }
   }
 
+  /**
+   * Resolves target element across the specified targeting hierarchy:
+   * 1. Stable DOM selector
+   * 2. Semantic ID / name attribute
+   * 3. Accessibility role & label / placeholder
+   * 4. Bounding box coordinates
+   */
+  findTargetElement(action: AgentAction): Element | null {
+    if (typeof document === 'undefined') return null;
+
+    // 1. Stable DOM selector
+    if (action.selector) {
+      try {
+        const el = document.querySelector(action.selector);
+        if (el) return el;
+      } catch {}
+    }
+
+    // 2. Semantic target ID / name
+    if (action.target) {
+      try {
+        if (action.target.startsWith('#') || action.target.startsWith('.')) {
+          const el = document.querySelector(action.target);
+          if (el) return el;
+        }
+        const byId = document.getElementById(action.target);
+        if (byId) return byId;
+
+        const byName = document.querySelector(`[name="${CSS.escape(action.target)}"]`);
+        if (byName) return byName;
+      } catch {}
+    }
+
+    // 3. Accessibility role / label / placeholder search
+    const searchTerms = [action.target, action.reason].filter(Boolean) as string[];
+    for (const term of searchTerms) {
+      const cleanTerm = term.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+      if (!cleanTerm) continue;
+
+      const candidates = Array.from(document.querySelectorAll('input, button, a, textarea, [role]'));
+      for (const el of candidates) {
+        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+        const role = (el.getAttribute('role') || '').toLowerCase();
+        const text = (el.textContent || '').toLowerCase();
+
+        if (
+          (aria && aria.includes(cleanTerm)) ||
+          (placeholder && placeholder.includes(cleanTerm)) ||
+          (text && text.includes(cleanTerm)) ||
+          (role === 'searchbox' && cleanTerm.includes('search'))
+        ) {
+          return el;
+        }
+      }
+    }
+
+    // 4. Bounding box coordinates fallback
+    if (action.boundingBox && typeof document.elementFromPoint === 'function') {
+      const centerX = action.boundingBox.x + action.boundingBox.width / 2;
+      const centerY = action.boundingBox.y + action.boundingBox.height / 2;
+      const elAtPoint = document.elementFromPoint(centerX, centerY);
+      if (elAtPoint) return elAtPoint;
+    }
+
+    return null;
+  }
+
+  private async executePressKey(el: Element, key: string): Promise<void> {
+    if ('focus' in el && typeof (el as any).focus === 'function') {
+      (el as any).focus();
+    }
+
+    const keyEventInit: KeyboardEventInit = {
+      key: key,
+      code: key === 'Enter' ? 'Enter' : key,
+      keyCode: key === 'Enter' ? 13 : 0,
+      which: key === 'Enter' ? 13 : 0,
+      bubbles: true,
+      cancelable: true,
+    };
+
+    el.dispatchEvent(new KeyboardEvent('keydown', keyEventInit));
+    el.dispatchEvent(new KeyboardEvent('keypress', keyEventInit));
+    el.dispatchEvent(new KeyboardEvent('keyup', keyEventInit));
+
+    if (key === 'Enter') {
+      const form = el.closest('form');
+      if (form) {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    }
+  }
+
   private async executeClick(el: Element): Promise<void> {
     if ('click' in el && typeof (el as any).click === 'function') {
       (el as any).click();
@@ -255,9 +360,13 @@ export class ActionExecutor {
     }
   }
 
-  private async executeType(el: Element, action: AgentAction): Promise<void> {
-    // Resolve value: prefer local token if valueRef exists
-    const valueToType = resolveActionValue(action, this.localTokens);
+  private async executeType(
+    el: Element,
+    action: AgentAction,
+    allowCredentials = true
+  ): Promise<void> {
+    // Resolve value: prefer local token if valueRef exists and credentials allowed
+    const valueToType = resolveActionValue(action, this.localTokens, allowCredentials);
 
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
       el.focus();

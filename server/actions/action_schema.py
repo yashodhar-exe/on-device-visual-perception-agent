@@ -19,6 +19,7 @@ ActionType = Literal[
     "focus",
     "submit",
     "wait",
+    "press_key",
 ]
 
 # Sensitive patterns that must NEVER be returned as raw plaintext
@@ -51,6 +52,7 @@ class A11yNode(BaseModel):
 class AgentAction(BaseModel):
     action: ActionType
     selector: Optional[str] = None
+    target: Optional[str] = None
     text: Optional[str] = None
     valueRef: Optional[str] = Field(
         None,
@@ -89,6 +91,17 @@ class AnalyzeRequest(BaseModel):
     url: str
     taskDescription: Optional[str] = None
     timestamp: Optional[float] = None
+    context: Optional[str] = Field(None, description="Active page context classification")
+
+    @field_validator("context")
+    def reject_blocked_contexts(cls, v):
+        if v is not None:
+            normalized = v.strip().upper()
+            if normalized in ["AUTHENTICATION", "MESSAGING", "SOCIAL_MEDIA"]:
+                raise ValueError(
+                    f"POLICY_VIOLATION: Context '{normalized}' is an agent-excluded context. Page data transmission prohibited."
+                )
+        return v
 
     @field_validator("screenshot")
     def validate_screenshot_format(cls, v):

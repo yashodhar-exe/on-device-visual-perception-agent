@@ -41,6 +41,7 @@ module.exports = {
   // Do NOT bundle any chrome.* references — they come from the browser at runtime
   externals: {
     'face-api.js': 'faceapi',
+    'tesseract.js': 'Tesseract',
   },
   optimization: {
     minimize: false, // Keep readable for debugging; set true for production

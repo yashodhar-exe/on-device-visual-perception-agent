@@ -53,6 +53,8 @@ export interface LocationInfo {
   pageLabel?: string; // e.g. "Login Form", "Profile Page"
 }
 
+export type ContentProvenance = 'USER_INPUT' | 'WEBPAGE_CONTENT' | 'UNKNOWN';
+
 // ─── Detected Item ────────────────────────────────────────────────────────────
 
 export interface DetectedItem {
@@ -67,6 +69,7 @@ export interface DetectedItem {
   timestamp: number;
   semanticPlaceholder?: string;
   variableName?: string;
+  provenance?: ContentProvenance;
 }
 
 // ─── Scan Result ─────────────────────────────────────────────────────────────
@@ -105,15 +108,62 @@ export interface ActivityEvent {
   url: string;
 }
 
-export type ScanStatus = 'idle' | 'scanning' | 'success' | 'failed' | 'restricted';
+export type ScanStatus = 'idle' | 'scanning' | 'success' | 'failed' | 'restricted' | 'blocked';
 
 export type ScanErrorReason =
   | 'restricted_url'
+  | 'context_blocked'
   | 'no_content_script'
   | 'timeout'
   | 'permission_denied'
   | 'injection_failed'
   | 'unknown';
+
+// ─── Context Blocking Types ──────────────────────────────────────────────────
+
+export type PageContextType = 'AUTHENTICATION' | 'MESSAGING' | 'SOCIAL_MEDIA' | 'AI_ASSISTANT' | 'NORMAL' | 'UNKNOWN';
+
+export type ContextPolicyType = 'BLOCK_ALL' | 'RESTRICTED' | 'PRIVACY_SEND_GATE' | 'ALLOW_PRIVACY_PIPELINE';
+
+export type AiSendGateState =
+  | 'AI_SITE_DETECTED'
+  | 'ANALYZING'
+  | 'SAFE'
+  | 'SENSITIVE_DETECTED'
+  | 'SANITIZING'
+  | 'SANITIZED'
+  | 'VERIFIED'
+  | 'READY'
+  | 'FAILED'
+  | 'ERROR'
+  | 'SENSITIVE_DATA_FOUND'
+  | 'REDACTING'
+  | 'PLACEHOLDERS_UPDATED';
+
+export interface AiSendGateEventPayload {
+  event: 'AI_SEND_BLOCKED' | 'AI_SEND_ALLOWED';
+  reason: string;
+  url?: string;
+  detectionsCount?: number;
+  redactionsCount?: number;
+}
+
+export interface ContextPolicyResult {
+  context: PageContextType;
+  policy: ContextPolicyType;
+  reason: string;
+  allowScreenshot: boolean;
+  allowDomTransmission: boolean;
+  allowOCRTransmission: boolean;
+  allowAgentActions: boolean;
+  allowCredentialResolution: boolean;
+  confidence: number;
+  details?: {
+    signals: string[];
+    matchedDomain?: string;
+    matchedApp?: string;
+  };
+}
 
 // ─── Extension State ─────────────────────────────────────────────────────────
 
@@ -139,6 +189,39 @@ export interface ExtensionState {
   actionHistory?: ActionResult[];
   auditLog?: PrivacyAuditRecord[];
   agentError?: string | null;
+  agentProgress?: AgentTaskProgress | null;
+  pageContext?: PageContextType;
+  contextPolicy?: ContextPolicyResult;
+}
+
+// ─── Agent State Machine Types ────────────────────────────────────────────────
+
+export type AgentStateStep =
+  | 'IDLE'
+  | 'CAPTURING'
+  | 'ANALYZING_LOCALLY'
+  | 'SANITIZING'
+  | 'SANITIZATION_VERIFIED'
+  | 'PLANNING'
+  | 'ACTION_VALIDATION'
+  | 'EXECUTING'
+  | 'VERIFYING'
+  | 'COMPLETED'
+  | 'BLOCKED'
+  | 'FAILED';
+
+export interface AgentTaskProgress {
+  step: AgentStateStep;
+  message: string;
+  taskDescription?: string;
+  detectionsCount?: number;
+  redactionsCount?: number;
+  rawPiiTransmitted?: number;
+  actionsTotal?: number;
+  actionsCompleted?: number;
+  currentAction?: string;
+  verified?: boolean;
+  error?: string;
 }
 
 // ─── Messages between content script and background ──────────────────────────
@@ -158,11 +241,17 @@ export type MessageType =
   | 'CAPTURE_SCREENSHOT'
   | 'ANALYZE_PAGE'
   | 'EXECUTE_ACTION'
+  | 'RUN_AGENT_TASK'
+  | 'AGENT_PROGRESS'
   | 'CONFIRM_ACTION'
   | 'REJECT_ACTION'
   | 'GET_AUDIT_LOG'
   | 'CLEAR_AUDIT_LOG'
-  | 'AGENT_STATUS';
+  | 'AGENT_STATUS'
+  | 'CONTEXT_BLOCKED'
+  | 'CONTEXT_UPDATE'
+  | 'GET_CONTEXT'
+  | 'AI_SEND_GATE_EVENT';
 
 export interface ExtensionMessage {
   type: MessageType;
@@ -350,31 +439,31 @@ export const OVERLAY_BORDER_COLORS: Record<DetectionType, string> = {
 export const PLACEHOLDER_MAP: Record<DetectionType, string> = {
   PASSWORD: '[PASSWORD]',
   EMAIL: '[EMAIL]',
-  PHONE: '[PHONE]',
+  PHONE: '[PHONE_NUMBER]',
   NAME: '[NAME]',
   ADDRESS: '[ADDRESS]',
   GOV_ID: '[GOV_ID]',
   AADHAAR: '[AADHAAR]',
   PAN: '[PAN]',
   IFSC: '[IFSC]',
-  CARD: '[CARD]',
+  CARD: '[CREDIT_CARD]',
   FACE: '[FACE_REDACTED]',
   API_KEY: '[API_KEY]',
   GITHUB_TOKEN: '[GITHUB_TOKEN]',
-  OPENAI_KEY: '[OPENAI_KEY]',
-  ANTHROPIC_KEY: '[ANTHROPIC_KEY]',
-  GOOGLE_KEY: '[GOOGLE_KEY]',
-  JWT_SECRET: '[JWT_SECRET]',
-  MONGODB_URL: '[MONGODB_URL]',
-  POSTGRES_URL: '[POSTGRES_URL]',
-  MYSQL_URL: '[MYSQL_URL]',
-  REDIS_URL: '[REDIS_URL]',
-  AWS_KEY: '[AWS_KEY]',
-  AZURE_KEY: '[AZURE_KEY]',
-  SUPABASE_KEY: '[SUPABASE_KEY]',
-  FIREBASE_CONFIG: '[FIREBASE_CONFIG]',
-  STRIPE_KEY: '[STRIPE_KEY]',
-  RAZORPAY_KEY: '[RAZORPAY_KEY]',
+  OPENAI_KEY: '[API_KEY]',
+  ANTHROPIC_KEY: '[API_KEY]',
+  GOOGLE_KEY: '[API_KEY]',
+  JWT_SECRET: '[JWT]',
+  MONGODB_URL: '[DATABASE_URL]',
+  POSTGRES_URL: '[DATABASE_URL]',
+  MYSQL_URL: '[DATABASE_URL]',
+  REDIS_URL: '[DATABASE_URL]',
+  AWS_KEY: '[API_KEY]',
+  AZURE_KEY: '[API_KEY]',
+  SUPABASE_KEY: '[API_KEY]',
+  FIREBASE_CONFIG: '[API_KEY]',
+  STRIPE_KEY: '[API_KEY]',
+  RAZORPAY_KEY: '[API_KEY]',
   OTHER: '[REDACTED]',
 };
 
@@ -388,11 +477,13 @@ export type AgentActionType =
   | 'hover'
   | 'focus'
   | 'submit'
-  | 'wait';
+  | 'wait'
+  | 'press_key';
 
 export interface AgentAction {
   action: AgentActionType;
   selector?: string;
+  target?: string;
   text?: string;
   valueRef?: string; // Symbolic reference e.g. "LOCAL_EMAIL", resolved in browser
   direction?: 'up' | 'down' | 'left' | 'right';
@@ -400,6 +491,7 @@ export interface AgentAction {
   requiresConfirmation?: boolean;
   reason?: string;
   confidence?: number;
+  boundingBox?: BoundingBox;
 }
 
 export interface ActionResult {
@@ -456,6 +548,7 @@ export interface AnalyzeRequest {
   sanitizedA11yTree?: A11yNode[];
   sanitizedDomSkeleton?: string;
   sanitizedOcr?: Array<OcrResult | { text: string; boundingBox?: BoundingBox; confidence?: number }>;
+  context?: PageContextType;
 }
 
 export interface AnalyzeResponse {
@@ -477,5 +570,8 @@ export interface PrivacyAuditRecord {
   actionsReceived: number;
   actionsExecuted: number;
   latencyMs?: number;
+  event?: string;
+  context?: PageContextType;
+  reason?: string;
 }
 

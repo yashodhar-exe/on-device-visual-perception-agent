@@ -14,6 +14,7 @@
 
 import { DetectedItem } from '../core/types';
 import { sanitizeObject, validatePayloadIsSafe } from '../sanitization/sanitizer';
+import { defaultAttachmentInterceptor } from '../visualPrivacy';
 
 // ─── Intercept fetch ──────────────────────────────────────────────────────────
 
@@ -21,6 +22,33 @@ export function installNetworkGuard(getItems: () => DetectedItem[]) {
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+    // 1. Guard against transmitting raw original image files
+    if (init?.body) {
+      if (typeof File !== 'undefined' && init.body instanceof File) {
+        const replacement = defaultAttachmentInterceptor.getSanitizedReplacement(init.body);
+        if (replacement) {
+          init = { ...init, body: replacement };
+        }
+      } else if (typeof FormData !== 'undefined' && init.body instanceof FormData) {
+        const newFormData = new FormData();
+        let modified = false;
+        for (const [key, val] of (init.body as any).entries()) {
+          if (val && typeof val === 'object' && val instanceof Blob) {
+            const replacement = defaultAttachmentInterceptor.getSanitizedReplacement(val);
+            if (replacement) {
+              newFormData.append(key, replacement, (replacement as any).name || (val as any).name);
+              modified = true;
+              continue;
+            }
+          }
+          newFormData.append(key, val);
+        }
+        if (modified) {
+          init = { ...init, body: newFormData };
+        }
+      }
+    }
+
     const items = getItems();
     if (items.length === 0) return originalFetch(input, init);
 
@@ -36,10 +64,12 @@ export function installNetworkGuard(getItems: () => DetectedItem[]) {
           init = { ...init, body: JSON.stringify(sanitized) };
 
           // Notify extension
-          chrome.runtime.sendMessage({
-            type: 'BLOCK_REQUEST',
-            payload: { url: input.toString(), violations },
-          });
+          try {
+            chrome.runtime.sendMessage({
+              type: 'BLOCK_REQUEST',
+              payload: { url: input.toString(), violations },
+            });
+          } catch {}
         }
       } catch {
         // Non-JSON body — skip
@@ -57,6 +87,32 @@ export function installXhrGuard(getItems: () => DetectedItem[]) {
 
   class GuardedXHR extends OriginalXHR {
     send(body?: Document | XMLHttpRequestBodyInit | null) {
+      if (body) {
+        if (typeof File !== 'undefined' && body instanceof File) {
+          const replacement = defaultAttachmentInterceptor.getSanitizedReplacement(body);
+          if (replacement) {
+            body = replacement;
+          }
+        } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+          const newFormData = new FormData();
+          let modified = false;
+          for (const [key, val] of (body as any).entries()) {
+            if (val && typeof val === 'object' && val instanceof Blob) {
+              const replacement = defaultAttachmentInterceptor.getSanitizedReplacement(val);
+              if (replacement) {
+                newFormData.append(key, replacement, (replacement as any).name || (val as any).name);
+                modified = true;
+                continue;
+              }
+            }
+            newFormData.append(key, val);
+          }
+          if (modified) {
+            body = newFormData;
+          }
+        }
+      }
+
       const items = getItems();
       if (body && typeof body === 'string' && items.length > 0) {
         try {
@@ -68,10 +124,12 @@ export function installXhrGuard(getItems: () => DetectedItem[]) {
             const sanitized = sanitizeObject(parsed, items);
             body = JSON.stringify(sanitized);
 
-            chrome.runtime.sendMessage({
-              type: 'BLOCK_REQUEST',
-              payload: { url: this.responseURL, violations },
-            });
+            try {
+              chrome.runtime.sendMessage({
+                type: 'BLOCK_REQUEST',
+                payload: { url: this.responseURL, violations },
+              });
+            } catch {}
           }
         } catch {
           // Non-JSON — skip

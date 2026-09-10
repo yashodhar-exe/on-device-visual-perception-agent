@@ -90,3 +90,45 @@ export async function detectAllFacesOnPage(): Promise<FaceDetection[]> {
 
   return results;
 }
+
+// ─── Detect faces in a screenshot data URL ───────────────────────────────────
+
+export async function detectFacesInScreenshot(
+  screenshotDataUrl: string
+): Promise<FaceDetection[]> {
+  if (!faceApiLoaded) return [];
+
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      if (typeof document === 'undefined') {
+        return reject(new Error('DOM required for screenshot face detection'));
+      }
+      const imgEl = new Image();
+      imgEl.crossOrigin = 'anonymous';
+      imgEl.onload = () => resolve(imgEl);
+      imgEl.onerror = (err) => reject(new Error(`Failed to load screenshot for face detection: ${String(err)}`));
+      imgEl.src = screenshotDataUrl;
+    });
+
+    // @ts-ignore
+    const faceapi = await import('face-api.js').catch(() => null);
+    if (!faceapi) return [];
+
+    const detections = await faceapi
+      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
+      .run();
+
+    return detections.map((d: any) => ({
+      boundingBox: {
+        x: Math.round(d.box.x),
+        y: Math.round(d.box.y),
+        width: Math.round(d.box.width),
+        height: Math.round(d.box.height),
+      },
+      confidence: d.score ?? 0.8,
+    }));
+  } catch (err) {
+    console.warn('[PrivacyFirewall] Screenshot face detection error:', err);
+    return [];
+  }
+}

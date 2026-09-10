@@ -43,9 +43,16 @@ async def health():
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(request: AnalyzeRequest, _authenticated: bool = Depends(verify_auth)):
+    if request.context and request.context.strip().upper() in ["AUTHENTICATION", "MESSAGING", "SOCIAL_MEDIA"]:
+        raise HTTPException(
+            status_code=422,
+            detail=f"POLICY_VIOLATION: Context '{request.context}' is an agent-excluded context. Page data transmission prohibited.",
+        )
     try:
         response = await vlm_engine.analyze(request)
         return response
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,

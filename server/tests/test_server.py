@@ -76,6 +76,50 @@ def test_analyze_endpoint_valid_request():
         assert pass_action["valueRef"] == "LOCAL_PASSWORD"
 
 
+def test_search_action_planning():
+    payload = {
+        "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "accessibilityTree": [
+            {
+                "role": "searchbox",
+                "label": "Search",
+                "selector": "#search-input",
+                "tagName": "INPUT",
+                "boundingBox": {"x": 50, "y": 50, "width": 300, "height": 40},
+            },
+            {
+                "role": "button",
+                "label": "Search",
+                "selector": "#search-button",
+                "tagName": "BUTTON",
+                "boundingBox": {"x": 360, "y": 50, "width": 80, "height": 40},
+            },
+        ],
+        "domStructure": "<div><input id='search-input' role='searchbox'/><button id='search-button'>Search</button></div>",
+        "ocrText": "National Internship Portal Search",
+        "url": "http://localhost:5055/search_demo.html",
+        "taskDescription": "Find the search box and search for internships",
+    }
+
+    response = client.post("/analyze", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    actions = data["actions"]
+
+    # Verify structured sequence: click searchbox -> type query -> submit
+    assert len(actions) == 3
+    assert actions[0]["action"] == "click"
+    assert actions[0]["selector"] == "#search-input"
+
+    assert actions[1]["action"] == "type"
+    assert actions[1]["selector"] == "#search-input"
+    assert actions[1]["text"] == "internships"
+
+    assert actions[2]["action"] == "click"
+    assert actions[2]["selector"] == "#search-button"
+
+
+
 def test_schema_rejects_raw_pii_in_text():
     # Attempting to assign raw email string into text must raise ValueError
     with pytest.raises(ValueError, match="Raw sensitive value detected"):
@@ -119,4 +163,70 @@ def test_server_rejects_raw_pii_in_dom_or_ocr():
     response = client.post("/analyze", json=bad_ocr_payload)
     assert response.status_code == 422
     assert "POLICY_VIOLATION" in response.text
+
+
+def test_server_rejects_authentication_context_payload():
+    auth_payload = {
+        "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "accessibilityTree": [],
+        "domStructure": "<div>Sign in to account</div>",
+        "ocrText": "Sign in",
+        "url": "https://example.com/login",
+        "context": "AUTHENTICATION",
+    }
+    response = client.post("/analyze", json=auth_payload)
+    assert response.status_code == 422
+    assert "POLICY_VIOLATION" in response.text
+
+
+def test_server_rejects_messaging_context_payload():
+    chat_payload = {
+        "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "accessibilityTree": [],
+        "domStructure": "<div>Chat log</div>",
+        "ocrText": "Type a message",
+        "url": "https://web.whatsapp.com",
+        "context": "MESSAGING",
+    }
+    response = client.post("/analyze", json=chat_payload)
+    assert response.status_code == 422
+    assert "POLICY_VIOLATION" in response.text
+
+
+def test_server_rejects_social_media_context_payload():
+    social_payload = {
+        "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "accessibilityTree": [],
+        "domStructure": "<div>Social feed and user posts</div>",
+        "ocrText": "What's happening?",
+        "url": "https://x.com/home",
+        "context": "SOCIAL_MEDIA",
+    }
+    response = client.post("/analyze", json=social_payload)
+    assert response.status_code == 422
+    assert "POLICY_VIOLATION" in response.text
+
+
+def test_schema_rejects_blocked_contexts():
+    with pytest.raises(ValueError, match="POLICY_VIOLATION"):
+        AnalyzeRequest(
+            screenshot="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            url="https://example.com",
+            context="AUTHENTICATION",
+        )
+
+    with pytest.raises(ValueError, match="POLICY_VIOLATION"):
+        AnalyzeRequest(
+            screenshot="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            url="https://example.com",
+            context="MESSAGING",
+        )
+
+    with pytest.raises(ValueError, match="POLICY_VIOLATION"):
+        AnalyzeRequest(
+            screenshot="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            url="https://twitter.com/home",
+            context="SOCIAL_MEDIA",
+        )
+
 

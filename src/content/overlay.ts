@@ -109,6 +109,8 @@ function drawOverlay(item: DetectedItem, container: HTMLElement, stackIndex = 0)
   container.appendChild(div);
 }
 
+import { determineElementProvenance } from '../provenance/contentProvenance';
+
 // ─── Render all overlays ─────────────────────────────────────────────────────
 
 export function renderOverlays(items: DetectedItem[]) {
@@ -121,6 +123,12 @@ export function renderOverlays(items: DetectedItem[]) {
   const posCounts = new Map<string, number>();
 
   for (const item of items) {
+    // DIRECTIONAL BOUNDARY: WEBPAGE_CONTENT must remain exactly as rendered.
+    // NEVER draw masks, overlays, or badges over webpage-owned output!
+    if (item.provenance === 'WEBPAGE_CONTENT') {
+      continue;
+    }
+
     if (item.location.boundingBox.width > 0 && item.location.boundingBox.height > 0) {
       const posKey = `${Math.round(item.location.boundingBox.x / 10)}:${Math.round(item.location.boundingBox.y / 10)}`;
       const stackIndex = posCounts.get(posKey) ?? 0;
@@ -168,6 +176,11 @@ export function redactItems(items: DetectedItem[]) {
   isRedacting = true;
   try {
     for (const item of items) {
+      // DIRECTIONAL BOUNDARY: Only USER_INPUT is eligible for privacy sanitization.
+      // WEBPAGE_CONTENT must NEVER be modified, masked, or replaced.
+      if (item.provenance && item.provenance !== 'USER_INPUT') {
+        continue;
+      }
       if (!item.location.selector) continue;
 
       try {
@@ -175,6 +188,11 @@ export function redactItems(items: DetectedItem[]) {
           item.location.selector
         );
         if (!el) continue;
+
+        // Dynamic element-level provenance guard
+        if (determineElementProvenance(el) !== 'USER_INPUT') {
+          continue;
+        }
 
         const semanticText = item.semanticPlaceholder || item.placeholder;
 
@@ -200,20 +218,6 @@ export function redactItems(items: DetectedItem[]) {
             el.textContent = sanitized;
           } else if (!currentText || currentText === item.value) {
             (el as HTMLElement).innerText = semanticText;
-            el.textContent = semanticText;
-          }
-          item.status = 'redacted';
-        } else if (el instanceof HTMLElement) {
-          const currentText = el.innerText || el.textContent || '';
-          if (!originalValues.has(el)) {
-            originalValues.set(el, currentText);
-          }
-          if (currentText && currentText.includes(item.value)) {
-            const sanitized = sanitizeElementText(currentText, item.value, item.type, item.variableName);
-            el.innerText = sanitized;
-            el.textContent = sanitized;
-          } else if (!currentText || currentText === item.value) {
-            el.innerText = semanticText;
             el.textContent = semanticText;
           }
           item.status = 'redacted';

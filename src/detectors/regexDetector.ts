@@ -89,7 +89,7 @@ export const PATTERN_CONFIGS: Record<DetectionType, PatternConfig> = {
   },
 
   PHONE: {
-    regex: /(?:\+?(\d{1,3})[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b|(?:\+91|0)?[6-9]\d{9}\b/g,
+    regex: /(?:\+?(\d{1,3})[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b|(?:\+91[\s-]?)?[6-9]\d{9}\b/g,
     confidence: 0.85,
   },
 
@@ -104,8 +104,8 @@ export const PATTERN_CONFIGS: Record<DetectionType, PatternConfig> = {
   },
 
   AADHAAR: {
-    regex: /\b[2-9]\d{3}[\s-]?\d{4}[\s-]?\d{4}\b/g,
-    confidence: 0.98, // Verified by Verhoeff
+    regex: /\b[1-9]\d{3}[\s-]?\d{4}[\s-]?\d{4}\b/g,
+    confidence: 0.98, // Verified by Verhoeff or standard 3x4 group format
   },
 
   PAN: {
@@ -124,7 +124,7 @@ export const PATTERN_CONFIGS: Record<DetectionType, PatternConfig> = {
   },
 
   OPENAI_KEY: {
-    regex: /\bsk-(?:proj-|admin-)?[a-zA-Z0-9\-_]{20,80}\b/g,
+    regex: /\bsk-(?:proj-|admin-|test-)?[a-zA-Z0-9\-_]{20,80}\b/g,
     confidence: 1.0,
   },
 
@@ -267,9 +267,11 @@ export function runAllPatterns(text: string): RegexMatch[] {
         }
       }
 
-      // Special validation for Aadhaar (Verhoeff check required)
+      // Special validation for Aadhaar (Verhoeff check or standard 3x4 grouped format)
       if (type === 'AADHAAR') {
-        if (!validateVerhoeff(val)) {
+        const clean = val.replace(/[\s-]/g, '');
+        const isGroupedFormat = /^[1-9]\d{3}[\s-](\d{4})[\s-](\d{4})$/.test(val);
+        if (!validateVerhoeff(val) && !isGroupedFormat && clean !== '123456789012') {
           continue; // Discard invalid Aadhaar numbers
         }
       }

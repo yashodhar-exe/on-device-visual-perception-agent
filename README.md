@@ -80,60 +80,131 @@ and navigate to `http://localhost:3000/test.html`.
 ## 4. Architecture Pipeline
 
 ```
-USER
- │
- ▼
-CHROME TAB
- │
- ▼
-DOM + SCREENSHOT
- │
- ▼
-LOCAL DETECTION
- ├── DOM Scanner
- ├── Regex (Aadhaar, PAN, Cards, Secrets)
- ├── NER (Quantized ONNX BERT)
- ├── OCR (Client-side Tesseract worker)
- └── Face Detection
- │
- ▼
-HYBRID FUSION (IoU Spatial Clustering)
- │
- ▼
-SEMANTIC REDACTION (Context-Preserving Placeholders)
- │
- ▼
-SCREENSHOT PIXEL REDACTION (Canvas Blackout + Luminance Check)
- │
- ▼
-FAIL-CLOSED POLICY VALIDATION (validatePayloadBeforeTransmission)
- │
- ▼
-SANITIZED PAYLOAD
- │
- ▼
-FASTAPI BACKEND
- │
- ▼
-AGENT ENGINE
- ├── CURRENT: Deterministic Structured Planner
- └── OPTIONAL: Local Neural VLM
- │
- ▼
-ACTION VALIDATOR (Disallows malicious selectors / code injection)
- │
- ▼
-LOCAL SYMBOLIC TOKEN RESOLUTION (LOCAL_EMAIL, LOCAL_PASSWORD)
- │
- ▼
-USER CONFIRMATION FOR HIGH-RISK ACTIONS (In-DOM Dialog)
- │
- ▼
-ACTION EXECUTOR (Native DOM Event Dispatch)
- │
- ▼
-LOCAL AUDIT LOG (Immutable Record in chrome.storage.local)
+                     ACTIVE TAB
+                         │
+                         ▼
+                CONTEXT DETECTOR
+                         │
+              ┌───────────┼───────────┬───────────┐
+              ▼           ▼           ▼           ▼
+        AUTHENTICATION  MESSAGING   SOCIAL MEDIA  NORMAL / UNKNOWN
+              │           │           │           │
+              ▼           ▼           ▼           ▼
+          BLOCK ALL   BLOCK ALL   BLOCK ALL   CONTEXT POLICY ENGINE
+                                     │
+                 ┌───────────────────┴───────────────────┐
+                 ▼                                       ▼
+             NORMAL                                   UNKNOWN
+                 │                                       │
+                 ▼                                       ▼
+         PRIVACY PIPELINE                           RESTRICTED
+                 │                                (Fail-Closed)
+                 ▼
+          LOCAL DETECTION
+           ├── DOM Scanner
+           ├── Regex (Aadhaar, PAN, Cards, Secrets)
+           ├── NER (Quantized ONNX BERT)
+           ├── OCR (Client-side Tesseract worker)
+           └── Face Detection
+                 │
+                 ▼
+          HYBRID FUSION (IoU Spatial Clustering)
+                 │
+                 ▼
+          SEMANTIC REDACTION (Context-Preserving Placeholders)
+                 │
+                 ▼
+          SCREENSHOT PIXEL REDACTION (Canvas Blackout)
+                 │
+                 ▼
+          FAIL-CLOSED POLICY VALIDATION (validatePayloadBeforeTransmission)
+                 │
+                 ▼
+          SANITIZED PAYLOAD
+                 │
+                 ▼
+          FASTAPI BACKEND
+                 │
+                 ▼
+          AGENT ENGINE (Deterministic Structured Planner)
+                 │
+                 ▼
+          ACTION VALIDATOR (Disallows malicious selectors / code injection)
+                 │
+                 ▼
+          RE-CHECK CONTEXT
+                 │
+                 ▼
+          ACTION EXECUTOR (Symbolic Token Resolution + Native Dispatch)
+                 │
+                 ▼
+          LOCAL AUDIT LOG (Immutable Record in chrome.storage.local)
 ```
+
+---
+
+## 4.1. Context-Based Agent Blocking (Authentication, Messaging & Social Media)
+
+The extension enforces strict agent exclusion for **Authentication Contexts**, **Messaging Applications**, and **Social Media Websites**:
+
+### Invariant
+> **Authentication pages, messaging applications, and social media platforms are agent-excluded contexts.** No screenshot, DOM, OCR, NER result, message content, feed, post, comment, credential, or other page information from these contexts may be transmitted to the agent backend, and no agent-generated action may execute within them.
+
+### Detected Contexts:
+1. **Authentication Contexts (`BLOCK_ALL`):**
+   - Login, Sign in, Sign up, Registration, Create Account, Password Reset, Forgot Password, Account Recovery, MFA / 2FA / OTP Verification.
+   - Multi-signal scoring combining URL paths, password/email inputs, submit buttons, OTP fields, and auth headings (prevents false positives on single password fields).
+2. **Messaging Applications (`BLOCK_ALL`):**
+   - WhatsApp Web, Telegram Web, Discord, Slack, Microsoft Teams, Facebook Messenger, Google Chat, and generic chat DOM structures.
+   - Multi-signal confidence engine combining configurable application signatures, message composers, chat threads, and send buttons (prevents false positives on generic contenteditable or comment forms).
+3. **Social Media Websites (`BLOCK_ALL`):**
+   - Facebook, Instagram, X (Twitter), LinkedIn, Reddit, TikTok, Threads, Pinterest, Snapchat, Bluesky, Mastodon, Tumblr, Quora, YouTube community/posts, Weibo, VK, and generic timeline/feed DOM structures.
+   - Multi-signal confidence engine combining domain signatures, feed roles (`div[role="feed"]`), and post containers. Agent actions, data harvesting, and planner executions are completely prohibited.
+4. **AI Assistant Websites (`PRIVACY_SEND_GATE`):**
+   - ChatGPT, Claude, Gemini, Microsoft Copilot, Perplexity, and configurable AI assistants.
+   - Enforces the **AI Send-Button Privacy Gate**: prevents submission until sensitive data is sanitized, semantic placeholders are applied, and content hash verification passes.
+5. **Unknown Contexts (`RESTRICTED`):**
+   - Fail-closed default: if context classification cannot be established, data transmission is prohibited.
+6. **Normal Webpages (`ALLOW_PRIVACY_PIPELINE`):**
+   - Enters the full local redaction and privacy preservation pipeline. Normal websites (Google Search, GitHub, Stack Overflow, Wikipedia) are completely unhindered.
+
+---
+
+## 4.2. AI Website Send-Button Privacy Gate
+
+On supported AI websites (ChatGPT, Claude, Gemini, Copilot, Perplexity, and custom registered AI assistants), users often paste sensitive environment variables, secrets, credentials, and PII into prompt input boxes. The extension enforces an automated client-side privacy gate directly in the page DOM:
+
+### Invariant
+> **On AI websites, outgoing prompt submissions are blocked until privacy sanitization has completed, all detected sensitive tokens are replaced with approved semantic placeholders, and the sanitized content is cryptographically verified.**
+
+### Gate State Machine (8 States)
+```
+[AI_SITE_DETECTED] ──► [ANALYZING] ──► [SENSITIVE_DATA_FOUND] ──► [REDACTING]
+                            │                                           │
+                            ▼ (No sensitive data)                       ▼
+                         [READY] ◄──────── [VERIFIED] ◄── [PLACEHOLDERS_UPDATED]
+                            │
+                      (User edits prompt)
+                            │
+                            ▼
+                       [ANALYZING] (Verification invalidated, send locked)
+```
+
+1. **`AI_SITE_DETECTED`**: Initial state upon detecting supported AI assistant website.
+2. **`ANALYZING`**: Scanning prompt input for secrets, API keys, passwords, credentials, tokens, PII.
+3. **`SENSITIVE_DATA_FOUND`**: Sensitive values identified; send button locked down.
+4. **`REDACTING`**: Applying approved semantic placeholders (e.g., `YOUR_GOOGLE_MAPS_API_KEY`).
+5. **`PLACEHOLDERS_UPDATED`**: Placeholders populated into composer with DOM input events dispatched.
+6. **`VERIFIED`**: Full scan re-run on outgoing content confirming no raw secrets remain; content hash recorded.
+7. **`READY`**: Gate unlocked; send button enabled.
+8. **`ERROR`**: Fail-closed state if redaction or verification encounters an exception.
+
+### Comprehensive Submission Interception
+Disabling the DOM button is treated strictly as visual affordance. True security enforcement relies on **capture-phase event listeners** on the window/document:
+- **Button Clicks**: Capture-phase `click` interception on send buttons calling `preventDefault()` and `stopImmediatePropagation()`.
+- **Keyboard Shortcuts**: Capture-phase `keydown` interception blocking `Enter`, `Cmd+Enter`, and `Ctrl+Enter` whenever `state !== 'READY'`.
+- **Form Submission**: Capture-phase `submit` listener preventing default form dispatch.
+- **Content-Hash Lock**: Content hash (`SHA-256` or fallback) tracks verified content. Any subsequent keystroke or paste immediately invalidates verification and re-locks submission until re-verified.
 
 ---
 

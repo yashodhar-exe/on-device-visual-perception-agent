@@ -78,9 +78,12 @@ Content-Type: application/json
   "ocrText": "Sign in to portal EMAIL=YOUR_EMAIL PASSWORD=YOUR_PASSWORD",
   "url": "http://localhost:3000/login",
   "taskDescription": "Sign in to portal with user credentials and submit",
-  "timestamp": 1773057600.0
+  "timestamp": 1773057600.0,
+  "context": "NORMAL"
 }
 ```
+
+> **Note on Context Enforcement:** If the `context` field is `"AUTHENTICATION"`, `"MESSAGING"`, or `"SOCIAL_MEDIA"`, or if page analysis detects an excluded context, the backend automatically rejects the request with HTTP 422 `POLICY_VIOLATION`. The server refuses to process or plan actions on authentication pages, messaging interfaces, or social media platforms. On `"AI_ASSISTANT"` websites, the client-side Send-Button Privacy Gate enforces local redaction before any submission.
 
 #### Response Schema (`AnalyzeResponse` - `200 OK`)
 
@@ -144,7 +147,7 @@ The backend emits actions strictly conforming to `AgentAction`:
 
 | HTTP Status | Error Identifier | Condition & Trigger |
 | :--- | :--- | :--- |
-| **`422 Unprocessable Entity`** | `POLICY_VIOLATION` | Raw sensitive PII/credential detected in incoming `domStructure`, `ocrText`, or action `text` fields. Transmission rejected fail-closed. |
+| **`422 Unprocessable Entity`** | `POLICY_VIOLATION` | Raw sensitive PII/credential detected in incoming `domStructure`, `ocrText`, or action `text` fields, or request context is blocked (`AUTHENTICATION` / `MESSAGING` / `SOCIAL_MEDIA`). Transmission rejected fail-closed. |
 | **`422 Unprocessable Entity`** | `SCHEMA_ERROR` | Request or action failed Pydantic validation (e.g., malformed base64 image, disallowed action type, malicious selector). |
 | **`401 Unauthorized`** | `UNAUTHORIZED` | Missing or invalid Bearer token when server authentication (`PF_SERVER_SECRET`) is enabled. |
 | **`500 Internal Server Error`** | `VLM_INFERENCE_ERROR` | Unhandled backend planning failure or model execution exception. |

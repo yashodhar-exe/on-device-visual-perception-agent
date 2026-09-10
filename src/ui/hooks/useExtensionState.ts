@@ -58,11 +58,25 @@ export function useExtensionState() {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs: chrome.tabs.Tab[]) => {
           if (chrome.runtime?.lastError) return;
           if (tabs[0]) {
+            const tabId = tabs[0].id;
             setState((prev) => ({
               ...prev,
               currentUrl: tabs[0].url ?? prev.currentUrl,
-              currentTabId: tabs[0].id ?? prev.currentTabId,
+              currentTabId: tabId ?? prev.currentTabId,
             }));
+
+            if (tabId) {
+              chrome.tabs.sendMessage(tabId, { type: 'GET_CONTEXT' }, (res) => {
+                void chrome.runtime.lastError;
+                if (res?.context) {
+                  setState((prev) => ({
+                    ...prev,
+                    pageContext: res.context,
+                    contextPolicy: res.policy,
+                  }));
+                }
+              });
+            }
           }
         });
       }

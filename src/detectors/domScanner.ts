@@ -7,7 +7,8 @@
  * Builds complete LocationInfo (selector, xpath, cssPath, boundingBox, pageRegion) for every node.
  */
 
-import { BoundingBox, LocationInfo } from '../core/types';
+import { BoundingBox, LocationInfo, ContentProvenance } from '../core/types';
+import { determineElementProvenance } from '../provenance/contentProvenance';
 
 export interface DomNode {
   element: Element;
@@ -15,6 +16,7 @@ export interface DomNode {
   location: LocationInfo;
   isInput: boolean;
   inputType?: string;
+  provenance?: ContentProvenance;
 }
 
 // ─── Node content caching to avoid rescanning unchanged nodes ────────────────
@@ -268,6 +270,7 @@ export function collectDomNodes(): DomNode[] {
       location: buildLocationInfo(el),
       isInput: true,
       inputType: input.type,
+      provenance: determineElementProvenance(el),
     });
   });
 
@@ -289,6 +292,7 @@ export function collectDomNodes(): DomNode[] {
       location: buildLocationInfo(el),
       isInput: true,
       inputType: 'textarea',
+      provenance: determineElementProvenance(el),
     });
   });
 
@@ -309,6 +313,7 @@ export function collectDomNodes(): DomNode[] {
       location: buildLocationInfo(el),
       isInput: true,
       inputType: 'contenteditable',
+      provenance: determineElementProvenance(el),
     });
   });
 
@@ -332,6 +337,7 @@ export function collectDomNodes(): DomNode[] {
       text,
       location: buildLocationInfo(el),
       isInput: false,
+      provenance: determineElementProvenance(el),
     });
   });
 
@@ -362,6 +368,7 @@ export function collectDomNodesInRoots(roots: Element[]): DomNode[] {
         location: buildLocationInfo(el),
         isInput: true,
         inputType: input.type,
+        provenance: determineElementProvenance(el),
       });
     });
 
@@ -376,6 +383,7 @@ export function collectDomNodesInRoots(roots: Element[]): DomNode[] {
         location: buildLocationInfo(el),
         isInput: true,
         inputType: 'textarea',
+        provenance: determineElementProvenance(el),
       });
     });
 
@@ -389,6 +397,7 @@ export function collectDomNodesInRoots(roots: Element[]): DomNode[] {
         location: buildLocationInfo(el),
         isInput: true,
         inputType: 'contenteditable',
+        provenance: determineElementProvenance(el),
       });
     });
 
@@ -406,6 +415,7 @@ export function collectDomNodesInRoots(roots: Element[]): DomNode[] {
         text,
         location: buildLocationInfo(el),
         isInput: false,
+        provenance: determineElementProvenance(el),
       });
     });
   }

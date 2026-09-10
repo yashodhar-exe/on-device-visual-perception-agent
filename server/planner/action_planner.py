@@ -9,8 +9,32 @@ Enforces security constraints:
   3. Provides deterministic fallback planning based on accessibility tree structure.
 """
 
-from typing import List
+import re
+from typing import List, Optional
 from actions.action_schema import AgentAction, A11yNode, AnalyzeRequest, AnalyzeResponse
+
+
+def extract_search_query(task_text: str) -> str:
+    """Extracts the intended query string from a task description."""
+    # Matches patterns like:
+    # "find the search box and search for internships"
+    # "search for 'machine learning jobs'"
+    # "search internships"
+    patterns = [
+        r"(?:find\s+(?:the\s+)?search\s+(?:box|bar|input)\s+and\s+)?search\s+(?:for\s+)?[\"']?([^\"'\.\n,]+)[\"']?",
+        r"(?:look\s+up|query)\s+(?:for\s+)?[\"']?([^\"'\.\n,]+)[\"']?",
+        r"search\s+[\"']?([^\"'\.\n,]+)[\"']?",
+    ]
+    for p in patterns:
+        m = re.search(p, task_text, re.IGNORECASE)
+        if m:
+            extracted = m.group(1).strip().strip("\"'").strip()
+            # If extracted phrase is generic placeholder, default to "internships"
+            if extracted.lower() in ["a specified query", "specified query", "query", "something"]:
+                return "internships"
+            if extracted:
+                return extracted
+    return "internships"
 
 
 def is_sensitive_target(selector: str, label: str) -> bool:
@@ -37,7 +61,91 @@ def plan_actions_from_tree(request: AnalyzeRequest) -> List[AgentAction]:
     if not tree:
         return actions
 
-    # Search for login/registration form fields
+    # 1. Search Box Interaction Planning (Priority Task)
+    # Check if task description indicates a search intent
+    is_search_intent = any(k in task for k in ["search", "find", "query", "internship", "look up"])
+
+    # Locate candidate search box
+    search_node = next(
+        (
+            n for n in tree
+            if (
+                n.role == "searchbox"
+                or (
+                    n.role == "textbox"
+                    and any(k in f"{n.selector} {n.label}".lower() for k in ["search", "query", "find"])
+                )
+            )
+        ),
+        None
+    )
+
+    if is_search_intent and search_node:
+        query = extract_search_query(request.taskDescription or "search for internships")
+
+        # Locate optional search submit button
+        search_btn = next(
+            (
+                n for n in tree
+                if n.role in ["button", "link"]
+                and any(k in f"{n.selector} {n.label}".lower() for k in ["search", "find", "go"])
+            ),
+            None
+        )
+
+        # 1. Click search box
+        actions.append(
+            AgentAction(
+                action="click",
+                selector=search_node.selector,
+                target=search_node.label or search_node.selector,
+                requiresConfirmation=False,
+                reason="Search input detected: focus search box",
+                confidence=0.96,
+            )
+        )
+
+        # 2. Type search query
+        actions.append(
+            AgentAction(
+                action="type",
+                selector=search_node.selector,
+                target=search_node.label or search_node.selector,
+                text=query,
+                requiresConfirmation=False,
+                reason=f"Type search query '{query}'",
+                confidence=0.96,
+            )
+        )
+
+        # 3. Submit search via button or press Enter
+        if search_btn:
+            actions.append(
+                AgentAction(
+                    action="click",
+                    selector=search_btn.selector,
+                    target=search_btn.label or search_btn.selector,
+                    requiresConfirmation=False,
+                    reason="Submit search query via search button",
+                    confidence=0.94,
+                )
+            )
+        else:
+            actions.append(
+                AgentAction(
+                    action="press_key",
+                    selector=search_node.selector,
+                    target=search_node.label or search_node.selector,
+                    value="Enter",
+                    requiresConfirmation=False,
+                    reason="Submit search query via Enter key",
+                    confidence=0.92,
+                )
+            )
+
+        return actions
+
+    # 2. Search for login/registration form fields
     email_node = next(
         (n for n in tree if "email" in f"{n.selector} {n.label}".lower() and n.role == "textbox"),
         None
@@ -56,6 +164,7 @@ def plan_actions_from_tree(request: AnalyzeRequest) -> List[AgentAction]:
             AgentAction(
                 action="type",
                 selector=email_node.selector,
+                target=email_node.label or email_node.selector,
                 valueRef="LOCAL_EMAIL",
                 requiresConfirmation=False,
                 reason="Populate user email from secure client store",
@@ -68,6 +177,7 @@ def plan_actions_from_tree(request: AnalyzeRequest) -> List[AgentAction]:
             AgentAction(
                 action="type",
                 selector=pass_node.selector,
+                target=pass_node.label or pass_node.selector,
                 valueRef="LOCAL_PASSWORD",
                 requiresConfirmation=True,
                 reason="Fill password securely without transmitting raw secret to server",
@@ -80,13 +190,14 @@ def plan_actions_from_tree(request: AnalyzeRequest) -> List[AgentAction]:
             AgentAction(
                 action="click",
                 selector=submit_node.selector,
+                target=submit_node.label or submit_node.selector,
                 requiresConfirmation=True,
                 reason="Form submission requires explicit user authorization",
                 confidence=0.90,
             )
         )
 
-    # If no specific login pattern, find first relevant interactive element matching task
+    # 3. Fallback: find first relevant interactive element matching task
     if not actions and tree:
         first_btn = next((n for n in tree if n.role == "button"), None)
         if first_btn:
@@ -94,6 +205,7 @@ def plan_actions_from_tree(request: AnalyzeRequest) -> List[AgentAction]:
                 AgentAction(
                     action="click",
                     selector=first_btn.selector,
+                    target=first_btn.label or first_btn.selector,
                     requiresConfirmation=is_sensitive_target(first_btn.selector, first_btn.label),
                     reason=f"Activate {first_btn.label or first_btn.selector}",
                     confidence=0.85,

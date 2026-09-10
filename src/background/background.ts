@@ -25,8 +25,11 @@ import {
   AnalyzeRequest,
   AnalyzeResponse,
   PrivacyAuditRecord,
+  PageContextType,
+  ContextPolicyResult,
 } from '../core/types';
 import { generateId, buildScanReport } from '../core/utils';
+import { evaluatePageContext } from '../privacy/contextPolicyEngine';
 
 // ─── Restricted URL Helper ──────────────────────────────────────────────────
 
@@ -67,6 +70,9 @@ const defaultState: ExtensionState = {
   actionHistory: [],
   auditLog: [],
   agentError: null,
+  agentProgress: null,
+  pageContext: 'NORMAL',
+  contextPolicy: undefined,
 };
 
 let state: ExtensionState = { ...defaultState };
@@ -269,6 +275,18 @@ function triggerScanForTab(tabId: number, tabUrl?: string, sendResponse?: (res: 
     return;
   }
 
+  const contextPolicy = state.contextPolicy || evaluatePageContext(tabUrl);
+  if (contextPolicy.policy === 'BLOCK_ALL' || state.pageContext === 'AUTHENTICATION' || state.pageContext === 'MESSAGING') {
+    clearScan(tabId);
+    state.scanStatus = 'blocked';
+    state.scanErrorReason = 'context_blocked';
+    state.scanErrorMessage = `Page is in ${state.pageContext || contextPolicy.context} context. Agent scanning and capabilities are completely disabled.`;
+    saveState();
+    broadcastState();
+    sendResponse?.({ ok: false, error: 'Context blocked' });
+    return;
+  }
+
   state.scanStatus = 'scanning';
   state.scanErrorReason = null;
   state.scanErrorMessage = null;
@@ -468,12 +486,118 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
         break;
       }
 
+      case 'CONTEXT_BLOCKED': {
+        const payload = message.payload as { context: PageContextType; reason: string; url?: string };
+        state.pageContext = payload.context;
+        const currentPolicy = evaluatePageContext(payload.url || state.currentUrl);
+        state.contextPolicy = currentPolicy;
+
+        const auditRecord: PrivacyAuditRecord = {
+          id: generateId(),
+          timestamp: Date.now(),
+          url: payload.url || state.currentUrl,
+          detectionsCount: 0,
+          redactionsCount: 0,
+          rawPiiTransmitted: 0,
+          payloadSafe: false,
+          serverCalled: false,
+          actionsReceived: 0,
+          actionsExecuted: 0,
+          event: 'CONTEXT_BLOCKED',
+          context: payload.context,
+          reason: payload.reason,
+        };
+        state.auditLog = [auditRecord, ...(state.auditLog || [])].slice(0, 50);
+
+        saveState();
+        broadcastState();
+        sendResponse({ ok: true });
+        break;
+      }
+
+      case 'CONTEXT_UPDATE': {
+        const payload = message.payload as { context: PageContextType; policy: ContextPolicyResult; url?: string };
+        state.pageContext = payload.context;
+        state.contextPolicy = payload.policy;
+        if (payload.url) state.currentUrl = payload.url;
+
+        if (payload.context === 'AUTHENTICATION' || payload.context === 'MESSAGING') {
+          clearScan(state.currentTabId);
+          state.scanStatus = 'blocked';
+          state.scanErrorReason = 'context_blocked';
+          state.scanErrorMessage = `${payload.context} context: Agent capabilities and page scanning are completely disabled.`;
+          if (state.currentTabId && typeof chrome !== 'undefined' && chrome.action?.setBadgeText) {
+            try {
+              chrome.action.setBadgeText({ text: 'STOP', tabId: state.currentTabId });
+              chrome.action.setBadgeBackgroundColor({ color: '#B91C1C', tabId: state.currentTabId });
+            } catch {}
+          }
+        }
+
+        saveState();
+        broadcastState();
+        sendResponse({ ok: true });
+        break;
+      }
+
+      case 'AI_SEND_GATE_EVENT': {
+        const payload = message.payload as {
+          event: 'AI_SEND_BLOCKED' | 'AI_SEND_ALLOWED';
+          reason: string;
+          url?: string;
+          detectionsCount?: number;
+          redactionsCount?: number;
+        };
+
+        const auditRecord: PrivacyAuditRecord = {
+          id: generateId(),
+          timestamp: Date.now(),
+          url: payload.url || state.currentUrl,
+          detectionsCount: payload.detectionsCount || 0,
+          redactionsCount: payload.redactionsCount || 0,
+          rawPiiTransmitted: 0,
+          payloadSafe: payload.event === 'AI_SEND_ALLOWED',
+          serverCalled: false,
+          actionsReceived: 0,
+          actionsExecuted: 0,
+          event: payload.event,
+          context: 'AI_ASSISTANT',
+          reason: payload.reason,
+        };
+        state.auditLog = [auditRecord, ...(state.auditLog || [])].slice(0, 50);
+
+        saveState();
+        broadcastState();
+        sendResponse({ ok: true });
+        break;
+      }
+
       case 'ANALYZE_PAGE': {
+        const req = message.payload as AnalyzeRequest;
+        const currentPolicy = evaluatePageContext(req.url || state.currentUrl);
+
+        if (
+          req.context === 'AUTHENTICATION' ||
+          req.context === 'MESSAGING' ||
+          state.pageContext === 'AUTHENTICATION' ||
+          state.pageContext === 'MESSAGING' ||
+          !currentPolicy.allowDomTransmission ||
+          currentPolicy.policy === 'BLOCK_ALL'
+        ) {
+          state.agentRunning = false;
+          state.agentError = `BLOCKED: Agent processing is disabled on ${currentPolicy.context || req.context} pages.`;
+          broadcastState();
+          sendResponse({
+            ok: false,
+            error: `POLICY_VIOLATION: Context '${currentPolicy.context || req.context}' is blocked from agent processing.`,
+          });
+          return true;
+        }
+
         state.agentRunning = true;
         state.agentError = null;
         broadcastState();
 
-        const req = message.payload as AnalyzeRequest;
         const endpoint = `${state.settings.serverEndpoint || 'http://localhost:8000'}/analyze`;
 
         fetch(endpoint, {
@@ -554,7 +678,15 @@ if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
         state.auditLog = [];
         state.actionHistory = [];
         state.pendingActions = [];
+        state.agentProgress = null;
         saveState();
+        broadcastState();
+        sendResponse({ ok: true });
+        break;
+      }
+
+      case 'AGENT_PROGRESS': {
+        state.agentProgress = message.payload as any;
         broadcastState();
         sendResponse({ ok: true });
         break;
@@ -571,6 +703,10 @@ if (typeof chrome !== 'undefined' && chrome.tabs?.onActivated) {
     try {
       const tab = await chrome.tabs.get(tabId);
       state.currentUrl = tab.url ?? '';
+
+      const contextPolicy = evaluatePageContext(state.currentUrl);
+      state.pageContext = contextPolicy.context;
+      state.contextPolicy = contextPolicy;
 
       if (isRestrictedUrl(state.currentUrl)) {
         await clearScan(tabId);
@@ -614,6 +750,10 @@ if (typeof chrome !== 'undefined' && chrome.tabs?.onUpdated) {
     if (tab.active && (changeInfo.status === 'loading' || changeInfo.url)) {
       state.currentUrl = tab.url ?? '';
       state.currentTabId = tabId;
+
+      const contextPolicy = evaluatePageContext(state.currentUrl);
+      state.pageContext = contextPolicy.context;
+      state.contextPolicy = contextPolicy;
 
       if (isRestrictedUrl(state.currentUrl)) {
         clearScan(tabId);

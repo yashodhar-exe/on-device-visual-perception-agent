@@ -14,18 +14,19 @@
  * Deduplicates overlapping detections and calculates risk score strictly from validated items.
  */
 
-import { DetectedItem, DetectionType, PLACEHOLDER_MAP, ScanMetrics } from '../core/types';
+import { DetectedItem, DetectionType, OcrResult, PLACEHOLDER_MAP, ScanMetrics, ContentProvenance } from '../core/types';
 import { generateId } from '../core/utils';
 import { collectDomNodes, collectDomNodesInRoots, DomNode, getTextMatchBoundingBox } from './domScanner';
 import { runAllPatterns } from './regexDetector';
 import { runNer, detectNameFromElement } from './nerDetector';
-import { detectAllFacesOnPage, detectFacesInImage } from './faceDetector';
+import { detectAllFacesOnPage, detectFacesInImage, detectFacesInScreenshot } from './faceDetector';
 import { isAllowlisted } from './allowlist';
 import {
   getSemanticPlaceholder,
   extractVariableNameFromContext,
   sanitizeContextString,
 } from '../sanitization/semanticPlaceholder';
+import { OcrEngine } from '../ocr/ocrEngine';
 
 function isPasswordInput(el: Element): boolean {
   if (!el || el.tagName !== 'INPUT') return false;
@@ -108,6 +109,55 @@ export class DetectionEngine {
     return this.deduplicateAndValidate();
   }
 
+  /**
+   * Full-page scan with screenshot-based OCR and face detection.
+   * Runs all DOM/regex/NER detectors, then additionally runs OCR and face
+   * detection on the provided screenshot image.
+   */
+  async runWithScreenshot(screenshotDataUrl: string): Promise<{
+    items: DetectedItem[];
+    timing: Omit<ScanMetrics, 'overlayRenderMs' | 'totalMs'>;
+    ocrResults: OcrResult[];
+  }> {
+    this.items = [];
+    this.seenKeys = new Set();
+
+    const t0 = performance.now();
+    const domNodes = collectDomNodes();
+    this.processDomNodes(domNodes);
+    const domScanMs = Math.round((performance.now() - t0) * 10) / 10;
+
+    const regexMs = domScanMs;
+
+    const t2 = performance.now();
+    await this.processNer(domNodes);
+    const nerMs = Math.round((performance.now() - t2) * 10) / 10;
+
+    // OCR on captured screenshot
+    const t4 = performance.now();
+    const ocrResults = await this.processOcr(screenshotDataUrl);
+    const ocrMs = Math.round((performance.now() - t4) * 10) / 10;
+
+    // Face detection: DOM images + screenshot
+    const t3 = performance.now();
+    await this.processFaces(null);
+    await this.processScreenshotFaces(screenshotDataUrl);
+    const faceMs = Math.round((performance.now() - t3) * 10) / 10;
+
+    const validatedItems = this.deduplicateAndValidate();
+
+    console.debug(
+      `[PrivacyFirewall] Detection complete: ${validatedItems.length} items, ` +
+      `OCR=${ocrResults.length} results, Face detection ran on screenshot`
+    );
+
+    return {
+      items: validatedItems,
+      timing: { domScanMs, regexMs, nerMs, ocrMs, faceMs },
+      ocrResults,
+    };
+  }
+
   // ─── DOM node & Regex processing ──────────────────────────────────────────
 
   private processDomNodes(nodes: DomNode[]) {
@@ -124,6 +174,7 @@ export class DetectionEngine {
           location: node.location,
           context: node.text,
           variableName: 'PASSWORD',
+          provenance: node.provenance,
         });
         continue;
       }
@@ -144,6 +195,7 @@ export class DetectionEngine {
             location: node.location,
             context: node.text,
             variableName: 'EMAIL',
+            provenance: node.provenance,
           });
         }
       }
@@ -159,6 +211,7 @@ export class DetectionEngine {
             location: node.location,
             context: node.text,
             variableName: 'NAME',
+            provenance: node.provenance,
           });
         }
       }
@@ -197,6 +250,7 @@ export class DetectionEngine {
             location,
             context: line,
             variableName: varName || undefined,
+            provenance: node.provenance,
           });
         }
       }
@@ -237,6 +291,7 @@ export class DetectionEngine {
           location,
           context: line,
           variableName: varName || undefined,
+          provenance: node.provenance,
         });
       }
     }
@@ -280,7 +335,64 @@ export class DetectionEngine {
     }
   }
 
-  // ─── Add Item with Allowlist & Confidence Check ────────────────────────────
+  // ─── OCR processing on screenshot ─────────────────────────────────────────
+
+  private async processOcr(screenshotDataUrl: string): Promise<OcrResult[]> {
+    try {
+      console.debug('[PrivacyFirewall] OCR detector invoked');
+      const engine = new OcrEngine();
+      const ocrResults = await engine.extractText(screenshotDataUrl);
+      console.debug(`[PrivacyFirewall] OCR detection count: ${ocrResults.length}`);
+
+      // Run regex patterns on each OCR text to classify PII
+      for (const ocr of ocrResults) {
+        if (!ocr.text || ocr.text.length < 3) continue;
+
+        const matches = runAllPatterns(ocr.text);
+        for (const match of matches) {
+          if (isAllowlisted(match.value)) continue;
+
+          this.addItem({
+            type: match.type,
+            value: match.value,
+            confidence: Math.min(match.confidence, ocr.confidence),
+            method: 'ocr',
+            location: {
+              boundingBox: ocr.boundingBox,
+              pageLabel: 'OCR',
+            },
+          });
+        }
+      }
+
+      return ocrResults;
+    } catch (err) {
+      console.warn('[PrivacyFirewall] OCR processing failed:', err);
+      return [];
+    }
+  }
+
+  // ─── Face detection on screenshot ─────────────────────────────────────────
+
+  private async processScreenshotFaces(screenshotDataUrl: string): Promise<void> {
+    try {
+      console.debug('[PrivacyFirewall] Screenshot face detector invoked');
+      const faces = await detectFacesInScreenshot(screenshotDataUrl);
+      console.debug(`[PrivacyFirewall] Screenshot face detection count: ${faces.length}`);
+      for (const face of faces) {
+        this.addItem({
+          type: 'FACE',
+          value: '[face]',
+          confidence: face.confidence,
+          method: 'cv',
+          location: { boundingBox: face.boundingBox, pageLabel: 'Screenshot' },
+        });
+      }
+    } catch {
+      // Best effort — screenshot face detection is optional
+    }
+  }
+
 
   private addItem(partial: {
     type: DetectionType;
@@ -291,6 +403,7 @@ export class DetectionEngine {
     context?: string;
     variableName?: string;
     semanticPlaceholder?: string;
+    provenance?: ContentProvenance;
   }) {
     if (!partial.value || partial.confidence < 0.60) return;
     if (partial.value !== '[face]' && partial.value !== '••••••••' && isAllowlisted(partial.value)) return;
@@ -330,6 +443,7 @@ export class DetectionEngine {
       location: partial.location,
       timestamp: Date.now(),
       variableName: varName || undefined,
+      provenance: partial.provenance || 'UNKNOWN',
     };
 
     this.items.push(item);
